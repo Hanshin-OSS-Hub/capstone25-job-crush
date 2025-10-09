@@ -1,0 +1,17 @@
+# Git 관련 파일 제외
+.git
+.gitignore
+
+# node_modules 제외 (각 컨테이너 내부에서 설치하므로)
+**/node_modules
+
+# 빌드 결과물 제외
+**/dist
+**/build
+
+# npm 디버그 로그 제외
+npm-debug.log*
+
+# Docker 관련 파일 자체는 이미지에 포함될 필요 없음
+Dockerfile
+.dockerignore
