@@ -1,6 +1,7 @@
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
-import DefaultLayout from '../components/layout/DefaultLayout'; // 👈 새로 만든 레이아웃
+import DefaultLayout from '../components/layout/DefaultLayout';
 import MainDashboardPage from '../features/dashboard/MainDashboardPage';
+import ResumeAnalysisPage from '../features/analysis/ResumeAnalysisPage'; // 👈 import 추가
 // ... 다른 import들
 
 const router = createBrowserRouter([
@@ -13,10 +14,14 @@ const router = createBrowserRouter([
       </DefaultLayout>
     ),
   },
-  // {
-  //   path: '/login',
-  //   element: <LoginPage />, // DefaultLayout이 알아서 Sidebar/Header를 숨겨줄 겁니다.
-  // }
+  {
+    path: '/analysis',
+    element: (
+      <DefaultLayout>
+        <ResumeAnalysisPage />
+      </DefaultLayout>
+    ),
+  },
 ]);
 
 const AppRouter = () => <RouterProvider router={router} />;

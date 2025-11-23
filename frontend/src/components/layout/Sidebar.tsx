@@ -1,5 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
+import { GoHomeFill, GoGraph } from "react-icons/go";
+import { FaMicrophone } from "react-icons/fa";
+import { FaGear } from "react-icons/fa6";
+
 
 // --- 누락된 컴포넌트 임시 플레이스홀더 ---
 const SidebarLinkGroup = ({ children, activeCondition }: any) => {
@@ -80,8 +84,8 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
                     'bg-graydark dark:bg-meta-4'
                   }`}
                 >
-                  {/* (Dashboard SVG 아이콘...) */}
-                  Dashboard
+                  <GoHomeFill />
+                  대시보드
                 </NavLink>
               </li>
               {/* */}
@@ -93,8 +97,32 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
                     'bg-graydark dark:bg-meta-4'
                   }`}
                 >
-                  {/* (Calendar SVG 아이콘...) */}
-                  Calendar
+                  <GoGraph />
+                  분석기록
+                </NavLink>
+              </li>
+              <li>
+                <NavLink
+                  to="/calendar"
+                  className={`group relative flex items-center gap-2.5 rounded-sm py-2 px-4 font-medium text-bodydark1 duration-300 ease-in-out hover:bg-graydark dark:hover:bg-meta-4 ${
+                    pathname.includes('calendar') &&
+                    'bg-graydark dark:bg-meta-4'
+                  }`}
+                >
+                  <FaMicrophone />
+                  면접연습
+                </NavLink>
+              </li>
+              <li>
+                <NavLink
+                  to="/calendar"
+                  className={`group relative flex items-center gap-2.5 rounded-sm py-2 px-4 font-medium text-bodydark1 duration-300 ease-in-out hover:bg-graydark dark:hover:bg-meta-4 ${
+                    pathname.includes('calendar') &&
+                    'bg-graydark dark:bg-meta-4'
+                  }`}
+                >
+                  <FaGear />
+                  설정
                 </NavLink>
               </li>
               {/* (다른 메뉴 아이템들... SidebarLinkGroup 포함) */}
