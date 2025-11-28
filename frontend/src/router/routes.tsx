@@ -1,17 +1,29 @@
-// 라우팅 설정 파일
-// React Router를 사용하여 페이지 라우팅을 관리합니다
+import { createBrowserRouter, RouterProvider } from 'react-router-dom';
+import DefaultLayout from '../components/layout/DefaultLayout';
+import MainDashboardPage from '../features/dashboard/MainDashboardPage';
+import ResumeAnalysisPage from '../features/analysis/ResumeAnalysisPage'; // 👈 import 추가
+// ... 다른 import들
 
-// TODO: React Router 설치 후 구현
-// import { createBrowserRouter } from 'react-router-dom';
-// import HomePage from '@/pages/HomePage';
-// import LoginPage from '@/pages/LoginPage';
-// import JobsPage from '@/pages/JobsPage';
+const router = createBrowserRouter([
+  {
+    path: '/',
+    // 뼈대를 DefaultLayout으로 교체합니다.
+    element: (
+      <DefaultLayout>
+        <MainDashboardPage />
+      </DefaultLayout>
+    ),
+  },
+  {
+    path: '/analysis',
+    element: (
+      <DefaultLayout>
+        <ResumeAnalysisPage />
+      </DefaultLayout>
+    ),
+  },
+]);
 
-// export const router = createBrowserRouter([
-//   {
-//     path: '/',
-//     element: <HomePage />,
-//   },
-//   // 추가 라우트를 여기에 정의
-// ]);
+const AppRouter = () => <RouterProvider router={router} />;
 
+export default AppRouter;
