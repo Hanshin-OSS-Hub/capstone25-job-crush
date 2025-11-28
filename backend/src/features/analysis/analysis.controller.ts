@@ -1,47 +1,17 @@
-import {
-  Controller,
-  Post,
-  Body,
-  UploadedFile,
-  UseInterceptors,
-  BadRequestException,
-} from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
-import { AnalysisService } from './analysis.service';
-import { AnalyzeResumeDto } from './dto/analyze-resume.dto';
-import { Buffer } from 'buffer';
+// 분석 컨트롤러
+// 분석 관련 API 엔드포인트를 정의합니다
 
-export interface MulterFile {
-  fieldname: string;
-  originalname: string;
-  encoding: string;
-  mimetype: string;
-  size: number;
-  buffer: Buffer;
-}
+import { Controller, Get } from '@nestjs/common';
+import { AnalysisService } from './analysis.service';
 
 @Controller('analysis')
 export class AnalysisController {
   constructor(private readonly analysisService: AnalysisService) {}
 
-  @Post('resume')
-  async analyzeResume(@Body() dto: AnalyzeResumeDto) {
-    return this.analysisService.analyzeWithGemini(
-      dto.resumeText,
-      dto.jobDescription,
-    );
-  }
-
-  @Post('resume/upload')
-  @UseInterceptors(FileInterceptor('file'))
-  async analyzeResumePdf(
-    @UploadedFile() file: MulterFile,
-    @Body('jobDescription') jobDescription: string,
-  ) {
-    if (!file || !file.buffer) {
-      throw new BadRequestException('파일이 업로드되지 않았습니다.');
-    }
-    const text = await this.analysisService.extractTextFromPdf(file.buffer);
-    return this.analysisService.analyzeWithGemini(text, jobDescription);
-  }
+  // TODO: 분석 로직 구현
+  // @Get('trends')
+  // async getTrends() {
+  //   return this.analysisService.getTrends();
+  // }
 }
+
