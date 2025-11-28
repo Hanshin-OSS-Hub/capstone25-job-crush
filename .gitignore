@@ -1,4 +1,8 @@
-# 의존성 패키지 폴더
+# 의존성 패키지 폴더 (명시적 경로 - 우선 적용)
+frontend/node_modules
+backend/node_modules
+
+# 추가 안전장치 (다른 위치의 node_modules도 대비)
 **/node_modules
 
 # 빌드 결과물
