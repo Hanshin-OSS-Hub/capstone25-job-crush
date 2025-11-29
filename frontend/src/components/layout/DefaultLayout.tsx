@@ -1,34 +1,42 @@
-import React, { useState } from 'react';
-import Header from './Header'; // 6단계에서 만들 파일
-import Sidebar from './Sidebar'; // 7단계에서 만들 파일
+import React, { useState } from "react";
+import Header from "./Header";
+import Sidebar from "./Sidebar";
+import { useLocation } from "react-router-dom";
 
-// DefaultLayout.jsx 코드를 .tsx로 변환 (타입 추가)
 const DefaultLayout = ({ children }: { children: React.ReactNode }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const location = useLocation();
 
-  // 참고: 로그인/회원가입 페이지에서 레이아웃을 숨기는 코드는
-  // react-router-dom v6 방식에 맞게 나중에 수정이 필요할 수 있습니다.
-  // 지금은 일단 그대로 둡니다.
-  
+  // 1. [기존 코드] 아예 레이아웃(헤더+사이드바)을 안 보여줄 경로들 (로그인 등)
+  const excludedRoutes = ["/login", "/signup"];
+  const isExcludedRoute = excludedRoutes.includes(location.pathname);
+
+  // 2. [추가 코드] "사이드바만" 숨길 경로들 정의
+  const noSidebarRoutes = ["/analysis", "/analysis/result"];
+  const isSidebarHidden = noSidebarRoutes.includes(location.pathname);
+
+  // 사이드바를 보여줄지 최종 결정 (전체 제외 경로가 아니고 && 사이드바 숨김 경로도 아닐 때)
+  const showSidebar = !isExcludedRoute && !isSidebarHidden;
+
   return (
     <div className="dark:bg-boxdark-2 dark:text-bodydark">
       <div className="flex h-screen overflow-hidden">
-        {/* */}
-        <Sidebar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
-        {/* */}
+        {/* 3. [수정] showSidebar 변수를 사용하여 조건부 렌더링 */}
+        {showSidebar && (
+          <Sidebar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
+        )}
 
         <div className="relative flex flex-1 flex-col overflow-y-auto overflow-x-hidden">
-          {/* */}
-          <Header sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
-          {/* */}
+          {/* 헤더는 여전히 보여줍니다 (로그인 페이지가 아니라면) */}
+          {!isExcludedRoute && (
+            <Header sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
+          )}
 
-          {/* */}
           <main>
             <div className="mx-auto max-w-screen-2xl p-4 md:p-6 2xl:p-10">
               {children}
             </div>
           </main>
-          {/* */}
         </div>
       </div>
     </div>

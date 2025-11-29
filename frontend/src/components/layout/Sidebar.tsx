@@ -1,10 +1,13 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import React, { useEffect, useRef, useState } from "react";
+import { NavLink, useLocation } from "react-router-dom";
+import { GoHomeFill, GoGraph } from "react-icons/go";
+import { FaMicrophone } from "react-icons/fa";
+import { FaGear } from "react-icons/fa6";
 
 // --- 누락된 컴포넌트 임시 플레이스홀더 ---
 const SidebarLinkGroup = ({ children, activeCondition }: any) => {
   // 임시로 자식 컴포넌트(React.Fragment)만 렌더링
-  return <>{children(() => {}, false)}</>; 
+  return <>{children(() => {}, false)}</>;
 };
 // ------------------------------------
 
@@ -21,20 +24,20 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
   const trigger = useRef<HTMLButtonElement>(null); // 타입 지정
   const sidebar = useRef<HTMLElement>(null); // 타입 지정
 
-  const storedSidebarExpanded = localStorage.getItem('sidebar-expanded');
+  const storedSidebarExpanded = localStorage.getItem("sidebar-expanded");
   const [sidebarExpanded, setSidebarExpanded] = useState(
-    storedSidebarExpanded === null ? false : storedSidebarExpanded === 'true'
+    storedSidebarExpanded === null ? false : storedSidebarExpanded === "true"
   );
 
   // useEffect 훅 2개 (click & keydown 핸들러) ...
   // (생략... 원본 코드에서 복사)
 
   useEffect(() => {
-    localStorage.setItem('sidebar-expanded', sidebarExpanded.toString());
+    localStorage.setItem("sidebar-expanded", sidebarExpanded.toString());
     if (sidebarExpanded) {
-      document.querySelector('body')?.classList.add('sidebar-expanded');
+      document.querySelector("body")?.classList.add("sidebar-expanded");
     } else {
-      document.querySelector('body')?.classList.remove('sidebar-expanded');
+      document.querySelector("body")?.classList.remove("sidebar-expanded");
     }
   }, [sidebarExpanded]);
 
@@ -42,13 +45,13 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
     <aside
       ref={sidebar}
       className={`absolute left-0 top-0 z-9999 flex h-screen w-72.5 flex-col overflow-y-hidden bg-black duration-300 ease-linear dark:bg-boxdark lg:static lg:translate-x-0 ${
-        sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        sidebarOpen ? "translate-x-0" : "-translate-x-full"
       }`}
     >
       {/* */}
       <div className="flex items-center justify-between gap-2 px-8 py-5.5 lg:py-6.5">
         <NavLink to="/">
-          <div className='text-2xl text-white font-bold'>JobCrush</div>
+          <div className="text-2xl text-white font-bold">JobCrush</div>
         </NavLink>
         <button
           ref={trigger}
@@ -76,12 +79,12 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
                 <NavLink
                   to="/" // 경로를 '/' (메인)으로 수정
                   className={`group relative flex items-center gap-2.5 rounded-sm py-2 px-4 font-medium text-bodydark1 duration-300 ease-in-out hover:bg-graydark dark:hover:bg-meta-4 ${
-                    (pathname === '/' || pathname.includes('dashboard')) && // '/' 경로도 활성화
-                    'bg-graydark dark:bg-meta-4'
+                    (pathname === "/" || pathname.includes("dashboard")) && // '/' 경로도 활성화
+                    "bg-graydark dark:bg-meta-4"
                   }`}
                 >
-                  {/* (Dashboard SVG 아이콘...) */}
-                  Dashboard
+                  <GoHomeFill />
+                  대시보드
                 </NavLink>
               </li>
               {/* */}
@@ -89,12 +92,36 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
                 <NavLink
                   to="/calendar"
                   className={`group relative flex items-center gap-2.5 rounded-sm py-2 px-4 font-medium text-bodydark1 duration-300 ease-in-out hover:bg-graydark dark:hover:bg-meta-4 ${
-                    pathname.includes('calendar') &&
-                    'bg-graydark dark:bg-meta-4'
+                    pathname.includes("calendar") &&
+                    "bg-graydark dark:bg-meta-4"
                   }`}
                 >
-                  {/* (Calendar SVG 아이콘...) */}
-                  Calendar
+                  <GoGraph />
+                  분석기록
+                </NavLink>
+              </li>
+              <li>
+                <NavLink
+                  to="/calendar"
+                  className={`group relative flex items-center gap-2.5 rounded-sm py-2 px-4 font-medium text-bodydark1 duration-300 ease-in-out hover:bg-graydark dark:hover:bg-meta-4 ${
+                    pathname.includes("calendar") &&
+                    "bg-graydark dark:bg-meta-4"
+                  }`}
+                >
+                  <FaMicrophone />
+                  면접연습
+                </NavLink>
+              </li>
+              <li>
+                <NavLink
+                  to="/calendar"
+                  className={`group relative flex items-center gap-2.5 rounded-sm py-2 px-4 font-medium text-bodydark1 duration-300 ease-in-out hover:bg-graydark dark:hover:bg-meta-4 ${
+                    pathname.includes("calendar") &&
+                    "bg-graydark dark:bg-meta-4"
+                  }`}
+                >
+                  <FaGear />
+                  설정
                 </NavLink>
               </li>
               {/* (다른 메뉴 아이템들... SidebarLinkGroup 포함) */}
