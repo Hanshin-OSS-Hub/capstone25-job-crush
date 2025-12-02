@@ -1,11 +1,11 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
+import React from "react";
+import { Link } from "react-router-dom";
 
 // --- 누락된 컴포넌트 임시 플레이스홀더 ---
-const DarkModeSwitcher = () => <div className="text-white">DM</div>;
-const DropdownNotification = () => <div className="text-white">Noti</div>;
-const DropdownMessage = () => <div className="text-white">Msg</div>;
-const DropdownUser = () => <div className="text-white">User</div>;
+// const DarkModeSwitcher = () => <div className="text-whiten">DM</div>;
+// const DropdownNotification = () => <div className="text-whiten">Noti</div>;
+// const DropdownMessage = () => <div className="text-whiten">Msg</div>;
+const DropdownUser = () => <div className="text-black">User</div>;
 // const LogoIcon = 'logo.svg'; // 로고 경로 임시 처리
 // ------------------------------------
 
@@ -45,9 +45,9 @@ const Header = (props: HeaderProps) => {
 
         <div className="flex items-center gap-3 2xsm:gap-7">
           <ul className="flex items-center gap-2 2xsm:gap-4">
-            <DarkModeSwitcher />
+            {/* <DarkModeSwitcher />
             <DropdownNotification />
-            <DropdownMessage />
+            <DropdownMessage /> */}
           </ul>
           <DropdownUser />
         </div>

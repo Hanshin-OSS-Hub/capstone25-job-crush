@@ -1,22 +1,35 @@
-import { createBrowserRouter, RouterProvider } from 'react-router-dom';
-import DefaultLayout from '../components/layout/DefaultLayout'; // 👈 새로 만든 레이아웃
-import MainDashboardPage from '../features/dashboard/MainDashboardPage';
+import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import DefaultLayout from "../components/layout/DefaultLayout";
+import MainDashboardPage from "../features/dashboard/MainDashboardPage";
+import ResumeAnalysisPage from "../features/analysis/ResumeAnalysisPage";
+import AnalysisResultPage from "../features/analysis/AnalysisResultPage";
 // ... 다른 import들
 
 const router = createBrowserRouter([
   {
-    path: '/',
-    // 뼈대를 DefaultLayout으로 교체합니다.
+    path: "/",
     element: (
       <DefaultLayout>
         <MainDashboardPage />
       </DefaultLayout>
     ),
   },
-  // {
-  //   path: '/login',
-  //   element: <LoginPage />, // DefaultLayout이 알아서 Sidebar/Header를 숨겨줄 겁니다.
-  // }
+  {
+    path: "/analysis",
+    element: (
+      <DefaultLayout>
+        <ResumeAnalysisPage />
+      </DefaultLayout>
+    ),
+  },
+  {
+    path: "/analysis/result", // 결과 페이지 경로
+    element: (
+      <DefaultLayout>
+        <AnalysisResultPage />
+      </DefaultLayout>
+    ),
+  },
 ]);
 
 const AppRouter = () => <RouterProvider router={router} />;
