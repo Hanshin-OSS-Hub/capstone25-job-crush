@@ -3,6 +3,7 @@ import DefaultLayout from "../components/layout/DefaultLayout";
 import MainDashboardPage from "../features/dashboard/MainDashboardPage";
 import ResumeAnalysisPage from "../features/analysis/ResumeAnalysisPage";
 import AnalysisResultPage from "../features/analysis/AnalysisResultPage";
+import AnalysisHistoryPage from "../features/history/AnalysisHistoryPage";
 // ... 다른 import들
 
 const router = createBrowserRouter([
@@ -27,6 +28,14 @@ const router = createBrowserRouter([
     element: (
       <DefaultLayout>
         <AnalysisResultPage />
+      </DefaultLayout>
+    ),
+  },
+  {
+    path: "/history", // 경로 추가
+    element: (
+      <DefaultLayout>
+        <AnalysisHistoryPage />
       </DefaultLayout>
     ),
   },

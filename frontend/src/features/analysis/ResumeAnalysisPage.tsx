@@ -1,9 +1,15 @@
 // frontend/src/features/analysis/ResumeAnalysisPage.tsx
 
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import AnalysisSection from './components/AnalysisSection'; 
-import { FaCloudUploadAlt, FaMagic, FaArrowLeft, FaSpinner } from "react-icons/fa"; 
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import AnalysisSection from "./components/AnalysisSection";
+import axios from "axios";
+import {
+  FaCloudUploadAlt,
+  FaMagic,
+  FaArrowLeft,
+  FaSpinner,
+} from "react-icons/fa";
 
 const ResumeAnalysisPage = () => {
   const navigate = useNavigate();
@@ -12,64 +18,91 @@ const ResumeAnalysisPage = () => {
 
   // 1. 입력 데이터 상태 관리
   const [formData, setFormData] = useState({
-    companyName: '',
-    jobDescription: '',
-    resumeContent: '',
+    companyName: "",
+    jobDescription: "",
+    resumeContent: "",
     resumeFile: null as File | null,
   });
 
   // 입력값 변경 핸들러
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   // 파일 업로드 핸들러
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      setFormData(prev => ({ ...prev, resumeFile: e.target.files![0] }));
+      setFormData((prev) => ({ ...prev, resumeFile: e.target.files![0] }));
     }
   };
 
   // ✅ [수정됨] 분석 요청 및 데이터 전달 핸들러
-  const handleAnalyzeClick = () => {
-    // 유효성 검사 예시 (필요시 주석 해제)
-    // if (!formData.companyName || !formData.resumeContent) {
-    //   alert('기업명과 자소서 내용을 입력해주세요.');
-    //   return;
-    // }
+  const handleAnalyzeClick = async () => {
+    // 👈 async 키워드 추가
+    // 유효성 검사
+    if (
+      !formData.companyName ||
+      (!formData.resumeContent && !formData.resumeFile)
+    ) {
+      alert("기업명과 자소서 내용(또는 파일)을 입력해주세요.");
+      return;
+    }
 
-    setIsAnalyzing(true); // 로딩 화면 띄우기
+    setIsAnalyzing(true); // 로딩 시작
 
-    // 3초 후에 분석 완료 처리 (나중에 실제 API 호출로 대체)
-    setTimeout(() => {
-      setIsAnalyzing(false); // 로딩 화면 끄기
-      
-      // 👇 [핵심] 결과 페이지로 이동하면서 formData를 state로 넘겨줍니다.
-      navigate('/analysis/result', { 
-        state: { 
+    try {
+      let response;
+
+      if (formData.resumeFile) {
+        // 1-1. 파일 업로드가 있는 경우: /analysis/resume/upload (FormData)
+        const dataToSend = new FormData();
+        dataToSend.append("companyName", formData.companyName);
+        dataToSend.append("jobDescription", formData.jobDescription);
+        dataToSend.append("resumeContent", formData.resumeContent);
+        dataToSend.append("resumeFile", formData.resumeFile);
+
+        response = await axios.post("/api/analysis/resume/upload", dataToSend, {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        });
+      } else {
+        // 1-2. 텍스트만 있는 경우: /analysis/resume (JSON)
+        const payload = {
           companyName: formData.companyName,
           jobDescription: formData.jobDescription,
-          resumeContent: formData.resumeContent 
-        } 
+          resumeText: formData.resumeContent, // DTO 필드명에 맞춰 전달
+        };
+
+        response = await axios.post("/api/analysis/resume", payload);
+      }
+
+      // 3. 성공 시 결과 페이지로 이동 (데이터 전달)
+      setIsAnalyzing(false);
+      navigate("/analysis/result", {
+        state: response.data, // 백엔드에서 준 완성된 JSON을 그대로 넘김
       });
-      
-    }, 3000);
+    } catch (error) {
+      console.error("분석 실패:", error);
+      setIsAnalyzing(false);
+      alert("분석 중 오류가 발생했습니다. 다시 시도해주세요.");
+    }
   };
 
   return (
     <div className="mx-auto max-w-3xl pb-10 relative">
-
       {/* 로딩 모달 */}
       {isAnalyzing && (
         <div className="fixed inset-0 z-99999 flex items-center justify-center bg-black/80 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-xl bg-white p-8 text-center shadow-2xl dark:bg-boxdark border border-gray-100 dark:border-strokedark">
-            
             {/* 아이콘 애니메이션 */}
             <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-primary/10">
               <FaMagic className="h-10 w-10 animate-pulse text-primary" />
             </div>
-            
+
             {/* 텍스트 */}
             <h3 className="mb-2 text-xl font-bold text-black dark:text-white">
               AI가 자소서를 분석하고 있어요
@@ -82,26 +115,25 @@ const ResumeAnalysisPage = () => {
             <div className="relative h-3 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
               <div className="absolute left-0 top-0 h-full w-1/2 animate-[loading_1.5s_ease-in-out_infinite] rounded-full bg-primary"></div>
             </div>
-            
+
             <p className="mt-3 text-xs text-gray-400">
               잠시만 기다려주세요 (약 30초 소요)
             </p>
           </div>
         </div>
       )}
-      
+
       {/* 1. 페이지 헤더 */}
       <div className="mb-10 text-center">
         <h1 className="mb-2 text-3xl font-bold text-black dark:text-white">
           AI 분석 시작하기
         </h1>
-        <p className="text-body text-gray-500 dark:text-gray-400">
+        <p className="text-gray-500 dark:text-gray-400">
           기업 정보와 자기소개서를 입력하시면 AI가 맞춤형 분석을 제공합니다
         </p>
       </div>
 
       <div className="flex flex-col gap-6">
-        
         {/* STEP 1: 지원할 기업 */}
         <AnalysisSection step={1} title="지원할 기업">
           <input
@@ -139,15 +171,17 @@ const ResumeAnalysisPage = () => {
 
           <div className="mb-6 flex items-center gap-4">
             <span className="h-px flex-1 bg-gray-200 dark:bg-gray-700"></span>
-            <span className="text-sm text-gray-500 dark:text-gray-400">또는</span>
+            <span className="text-sm text-gray-500 dark:text-gray-400">
+              또는
+            </span>
             <span className="h-px flex-1 bg-gray-200 dark:bg-gray-700"></span>
           </div>
 
           <div className="relative rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-8 text-center hover:bg-gray-100 dark:border-gray-600 dark:bg-meta-4 dark:hover:bg-opacity-50">
-            <input 
-              type="file" 
+            <input
+              type="file"
               onChange={handleFileChange}
-              className="absolute top-0 left-0 h-full w-full cursor-pointer opacity-0" 
+              className="absolute top-0 left-0 h-full w-full cursor-pointer opacity-0"
             />
             <div className="flex flex-col items-center justify-center gap-2">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm dark:bg-boxdark">
@@ -166,7 +200,7 @@ const ResumeAnalysisPage = () => {
 
         {/* 하단 버튼 액션 */}
         <div className="mt-4 flex flex-col items-center gap-4">
-          <button 
+          <button
             onClick={handleAnalyzeClick}
             disabled={isAnalyzing}
             className="flex items-center gap-2 rounded-lg bg-primary px-8 py-3.5 font-medium text-white shadow-lg transition hover:bg-opacity-90 disabled:opacity-50"

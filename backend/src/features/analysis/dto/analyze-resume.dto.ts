@@ -3,6 +3,10 @@ import { IsNotEmpty, IsString, MinLength } from 'class-validator';
 export class AnalyzeResumeDto {
   @IsString()
   @IsNotEmpty()
+  companyName: string;
+
+  @IsString()
+  @IsNotEmpty()
   @MinLength(100)
   resumeText: string; // 자소서 원문
 
