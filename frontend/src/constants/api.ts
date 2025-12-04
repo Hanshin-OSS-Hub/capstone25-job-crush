@@ -40,6 +40,13 @@ export const API_ENDPOINTS = {
     BY_ID: (id: string | number) => `/applications/${id}`,
     BY_USER: (userId: string) => `/applications/user/${userId}`,
   },
+
+  // 면접 관련
+  INTERVIEWS: {
+    SESSIONS: '/interviews/sessions',
+    SESSION_BY_ID: (sessionId: string) => `/interviews/sessions/${sessionId}`,
+    SESSION_EVALUATION: (sessionId: string) => `/interviews/sessions/${sessionId}/evaluation`,
+  },
   
   // 사용자 관련
   USERS: {

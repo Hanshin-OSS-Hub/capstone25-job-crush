@@ -3,8 +3,12 @@ import DefaultLayout from "../components/layout/DefaultLayout";
 import MainDashboardPage from "../features/dashboard/MainDashboardPage";
 import ResumeAnalysisPage from "../features/analysis/ResumeAnalysisPage";
 import AnalysisResultPage from "../features/analysis/AnalysisResultPage";
+// --- sjy 브랜치 추가분 ---
 import AnalysisHistoryPage from "../features/history/AnalysisHistoryPage";
-// ... 다른 import들
+// --- dev 브랜치 추가분 ---
+import InterviewSetupPage from "../pages/interviews/InterviewSetupPage";
+import InterviewSessionPage from "../pages/interviews/InterviewSessionPage";
+import InterviewResultPage from "../pages/interviews/InterviewResultPage";
 
 const router = createBrowserRouter([
   {
@@ -31,11 +35,37 @@ const router = createBrowserRouter([
       </DefaultLayout>
     ),
   },
+  // --- sjy 브랜치 기능: 분석 기록 ---
   {
-    path: "/history", // 경로 추가
+    path: "/history",
     element: (
       <DefaultLayout>
         <AnalysisHistoryPage />
+      </DefaultLayout>
+    ),
+  },
+  // --- dev 브랜치 기능: 면접 연습 관련 ---
+  {
+    path: "/interviews/setup",
+    element: (
+      <DefaultLayout>
+        <InterviewSetupPage />
+      </DefaultLayout>
+    ),
+  },
+  {
+    path: "/interviews/session/:sessionId",
+    element: (
+      <DefaultLayout>
+        <InterviewSessionPage />
+      </DefaultLayout>
+    ),
+  },
+  {
+    path: "/interviews/result/:sessionId",
+    element: (
+      <DefaultLayout>
+        <InterviewResultPage />
       </DefaultLayout>
     ),
   },

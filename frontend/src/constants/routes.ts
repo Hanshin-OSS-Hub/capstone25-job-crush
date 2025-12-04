@@ -8,5 +8,10 @@ export const ROUTES = {
   JOB_DETAIL: (id: string | number) => `/jobs/${id}`,
   PROFILE: '/profile',
   APPLICATIONS: '/applications',
+  INTERVIEWS: {
+    SETUP: '/interviews/setup',
+    SESSION: (sessionId: string | number) => `/interviews/session/${sessionId}`,
+    RESULT: (sessionId: string | number) => `/interviews/result/${sessionId}`,
+  },
 } as const;
 

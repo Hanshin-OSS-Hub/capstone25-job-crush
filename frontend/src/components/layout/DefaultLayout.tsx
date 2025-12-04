@@ -12,8 +12,14 @@ const DefaultLayout = ({ children }: { children: React.ReactNode }) => {
   const isExcludedRoute = excludedRoutes.includes(location.pathname);
 
   // 2. [추가 코드] "사이드바만" 숨길 경로들 정의
-  const noSidebarRoutes = ["/analysis", "/analysis/result"];
-  const isSidebarHidden = noSidebarRoutes.includes(location.pathname);
+  const noSidebarRoutes = [
+    "/analysis",
+    "/analysis/result",
+    "/interviews/setup",
+    "/interviews/session",
+    "/interviews/result",
+  ];
+  const isSidebarHidden = noSidebarRoutes.some((route) => location.pathname.startsWith(route));
 
   // 사이드바를 보여줄지 최종 결정 (전체 제외 경로가 아니고 && 사이드바 숨김 경로도 아닐 때)
   const showSidebar = !isExcludedRoute && !isSidebarHidden;
