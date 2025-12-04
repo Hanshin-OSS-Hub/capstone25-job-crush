@@ -9,6 +9,7 @@ import {
   FaCommentDots,
 } from "react-icons/fa";
 import { BiSolidQuoteLeft } from "react-icons/bi";
+import { ROUTES } from "@/constants/routes";
 
 // ----------------------------------------------------------------------
 // 1. 데이터 타입 정의 (백엔드 응답 스키마 예상)
@@ -243,7 +244,7 @@ const AnalysisResultPage = () => {
       {/* 3. 하단 플로팅 버튼 (모의 면접 시작) */}
       <div className="fixed bottom-10 left-0 right-0 flex justify-center z-50 pointer-events-none">
         <button
-          onClick={() => navigate("/interview/setup")} // 나중에 면접 설정 페이지로 이동
+          onClick={() => navigate(ROUTES.INTERVIEWS.SETUP)} // 나중에 면접 설정 페이지로 이동
           className="pointer-events-auto flex items-center gap-2 rounded-full bg-primary px-8 py-4 text-lg font-bold text-white shadow-2xl transition-all hover:-translate-y-1 hover:bg-opacity-90 hover:shadow-primary/50"
         >
           <FaCommentDots className="text-xl" />
