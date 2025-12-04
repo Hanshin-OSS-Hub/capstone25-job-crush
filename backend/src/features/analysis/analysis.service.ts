@@ -27,25 +27,69 @@ export class AnalysisService {
     }
   }
 
-  async analyzeWithGemini(resumeText: string, jobDescription: string) {
+  async analyzeWithGemini(
+    resumeText: string,
+    jobDescription: string,
+    companyName: string,
+  ) {
     const model = this.genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
     const prompt = this.createAnalysisPrompt(resumeText, jobDescription);
-    
+
     try {
       const result = await model.generateContent({
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
       });
       const responseText = result.response.text();
-      // 마크다운 제거
+
+      // 마크다운 코드블록(```json ... ```)이 포함될 수 있으므로 먼저 제거
       const cleanedText = responseText.replace(/```json|```/g, '').trim();
-      return JSON.parse(cleanedText);
+
+      let aiResponse: any;
+      try {
+        aiResponse = JSON.parse(cleanedText);
+      } catch (parseError) {
+        console.error('Gemini JSON Parse Error:', parseError, cleanedText);
+        throw new Error('AI 응답 파싱 실패');
+      }
+
+      return {
+        companyName: companyName, // 프론트에서 받은 기업명 그대로 반환
+        jobRole: '지원 직무', // (필요하면 AI에게 직무명을 추출해달라고 할 수도 있음)
+        totalScore: aiResponse.totalScore || 0,
+        summary: aiResponse.overallAssessment,
+        items: [
+          {
+            id: 1,
+            question: '자기소개서 분석 결과',
+            answer: resumeText.substring(0, 300) + '...', // 원문 일부 표시
+            score: aiResponse.totalScore || 0,
+            feedbacks: [
+              ...(aiResponse.strengths?.map((s) => ({
+                type: 'good',
+                title: '강점',
+                content: s,
+              })) || []),
+              ...(aiResponse.weaknesses?.map((w) => ({
+                type: 'bad',
+                title: '보완점',
+                content: w,
+              })) || []),
+              ...(aiResponse.proofreading?.map((p) => ({
+                type: 'suggestion',
+                title: '맞춤법/표현',
+                content: `"${p.original}" -> "${p.corrected}"`,
+              })) || []),
+            ],
+          },
+        ],
+      };
     } catch (error) {
       console.error('Gemini Error:', error);
       throw new Error('AI 분석 실패');
     }
   }
   private createAnalysisPrompt(resume: string, jd: string): string {
-      return `
+    return `
       당신은 수석 채용 담당자이자 전문 커리어 코치입니다.
       제시된 [채용 공고]를 기준으로 [자소서 원문]을 분석하고,
       제안서 요구사항인 [맞춤법 교정], [문맥 흐름], [직무 키워드 적합성], [강점 및 약점], [예상 면접 질문]을
@@ -59,6 +103,7 @@ export class AnalysisService {
 
       [요구사항 및 JSON 출력 형식]
       {
+        "totalScore": 85,  <-- [중요] 점수 필드가 꼭 있어야 파싱됩니다.
         "overallAssessment": "자소서에 대한 전반적인 총평 (예: '직무 이해도는 높으나, 구체적인 성과가 부족합니다.')",
         "proofreading": [
           {

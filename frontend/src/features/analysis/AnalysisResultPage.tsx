@@ -100,9 +100,11 @@ const AnalysisResultPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // 이전 페이지에서 넘겨준 데이터 받기 (없으면 mockData 사용)
-  // const receivedData = location.state as { companyName: string; ... } | null;
-  const data = mockResultData; // 지금은 UI 확인을 위해 Mock Data 고정
+  // 이전 페이지(ResumeAnalysisPage)에서 넘겨준 데이터 받기
+  const receivedData = location.state as AnalysisResult | null;
+
+  // 데이터가 있으면 실제 분석 결과 사용, 없으면 mock 데이터로 대체
+  const data: AnalysisResult = receivedData || mockResultData;
 
   return (
     <div className="mx-auto max-w-7xl pb-24 relative">
@@ -113,7 +115,7 @@ const AnalysisResultPage = () => {
           <span className="text-gray-400 font-light">|</span>
           {data.jobRole} 분석 리포트
         </h1>
-        <p className="mt-2 text-body text-gray-500">
+        <p className="mt-2 text-gray-500">
           AI가 분석한 자소서 피드백과 개선사항을 확인하세요
         </p>
       </div>
