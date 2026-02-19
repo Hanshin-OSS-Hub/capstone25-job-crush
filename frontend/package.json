@@ -10,13 +10,13 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@heroicons/react": "^2.2.0",
     "@mediapipe/face_mesh": "^0.4.1633559619",
     "@tensorflow-models/face-landmarks-detection": "^1.0.6",
-    "@heroicons/react": "^2.2.0",
     "axios": "^1.7.9",
     "flowbite": "^3.1.2",
     "flowbite-react": "^0.12.10",
-    "kalidokit": "^1.1.0",
+    "kalidokit": "^1.1.5",
     "pitchfinder": "^2.3.2",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
