@@ -1,9 +1,15 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { fileURLToPath, URL } from "node:url";
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    alias: {
+      "@": fileURLToPath(new URL("./src", import.meta.url)),
+    },
+  },
   server: {
     host: true, // 외부 접속 허용 (Docker 환경 필수)
     proxy: {
@@ -13,7 +19,9 @@ export default defineConfig({
         // (프론트엔드 컨테이너 입장에서는 localhost가 아니라 backend 컨테이너)
         target: "http://backend:3000",
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, ""), // /api/analysis -> /analysis 로 변환
+        // ✅ 정규식 슬래시 이스케이프
+        //   /api/analysis  ->  /analysis
+        rewrite: (path) => path.replace(/^\/api/, ""),
       },
     },
   },
