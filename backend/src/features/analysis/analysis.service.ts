@@ -7,8 +7,9 @@ import { ConfigService } from '@nestjs/config';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { z } from 'zod';
 
+// pdf-parse 2.x: PDFParse 클래스 + getText() (구버전 pdfParse(buffer) 미지원)
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const pdfParse = require('pdf-parse');
+const { PDFParse } = require('pdf-parse');
 
 @Injectable()
 export class AnalysisService {
@@ -52,11 +53,14 @@ export class AnalysisService {
    * PDF 텍스트 추출
    */
   async extractTextFromPdf(buffer: Buffer): Promise<string> {
+    const parser = new PDFParse({ data: buffer });
     try {
-      const data = await pdfParse(buffer);
-      return data.text;
+      const result = await parser.getText();
+      return result.text;
     } catch {
       throw new InternalServerErrorException('PDF 텍스트 추출 실패');
+    } finally {
+      await parser.destroy();
     }
   }
 
