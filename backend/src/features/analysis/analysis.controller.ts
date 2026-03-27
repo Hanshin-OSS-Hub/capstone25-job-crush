@@ -5,7 +5,9 @@ import {
   UploadedFile,
   UseInterceptors,
   BadRequestException,
+  UseGuards,
 } from '@nestjs/common';
+import { ThrottlerGuard } from '@nestjs/throttler';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { AnalysisService } from './analysis.service';
 import { AnalyzeResumeDto } from './dto/analyze-resume.dto';
@@ -21,6 +23,7 @@ export interface MulterFile {
 }
 
 @Controller('analysis')
+@UseGuards(ThrottlerGuard)
 export class AnalysisController {
   constructor(private readonly analysisService: AnalysisService) {}
 
