@@ -11,9 +11,8 @@ import { AnalysisModule } from './features/analysis/analysis.module';
 import { JobsModule } from './features/jobs/jobs.module';
 import { ApplicationsModule } from './features/applications/applications.module';
 import { UsersModule } from './features/users/users.module';
-
-// 전역 모듈들
-// import { DatabaseModule } from './database/database.module';
+import { PrismaModule } from './database/prisma.module';
+import { InterviewsModule } from './features/interviews/interviews.module';
 
 @Module({
   imports: [
@@ -29,7 +28,7 @@ import { UsersModule } from './features/users/users.module';
         limit: 5,
       },
     ]),
-    // DatabaseModule.forRoot({ isGlobal: true }), // TODO: DB 설정 후 활성화
+    PrismaModule,
 
     // 기능 모듈들
     AuthModule,
@@ -38,6 +37,7 @@ import { UsersModule } from './features/users/users.module';
     JobsModule,
     ApplicationsModule,
     UsersModule,
+    InterviewsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

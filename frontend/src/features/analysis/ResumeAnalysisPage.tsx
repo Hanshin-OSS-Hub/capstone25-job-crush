@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
 import {
   FaMagic,
   FaSpinner,
@@ -9,6 +8,10 @@ import {
   FaCloudUploadAlt,
 } from "react-icons/fa";
 import AnalysisSection from "./components/AnalysisSection";
+import { apiClient } from "@/api/client";
+
+/** Gemini 가드+본분석 등으로 10초 기본 타임아웃을 넘기기 쉬움 */
+const ANALYSIS_REQUEST_MS = 180_000;
 
 const ResumeAnalysisPage = () => {
   const navigate = useNavigate();
@@ -56,28 +59,48 @@ const ResumeAnalysisPage = () => {
         const dataToSend = new FormData();
         dataToSend.append("companyName", formData.companyName);
         dataToSend.append("jobDescription", formData.jobDescription);
-        dataToSend.append("resumeText", formData.resumeContent);
+        if (formData.resumeContent) {
+          dataToSend.append("resumeText", formData.resumeContent);
+        }
         dataToSend.append("resumeFile", formData.resumeFile);
 
-        response = await axios.post("/api/analysis/resume/upload", dataToSend, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
+        response = await apiClient.post(
+          "/analysis/resume/upload",
+          dataToSend,
+          { timeout: ANALYSIS_REQUEST_MS },
+        );
       } else {
-        response = await axios.post("/api/analysis/resume", {
-          companyName: formData.companyName,
-          jobDescription: formData.jobDescription,
-          resumeText: formData.resumeContent,
-        });
+        response = await apiClient.post(
+          "/analysis/resume",
+          {
+            companyName: formData.companyName,
+            jobDescription: formData.jobDescription,
+            resumeText: formData.resumeContent,
+          },
+          { timeout: ANALYSIS_REQUEST_MS },
+        );
       }
 
       navigate("/analysis/result", { state: response.data });
-    } catch (error) {
-      if (axios.isAxiosError(error)) {
-        const backendError = error.response?.data;
+    } catch (error: unknown) {
+      if (error && typeof error === "object" && "code" in error) {
+        const ax = error as { code?: string; message?: string };
+        if (ax.code === "ECONNABORTED") {
+          alert(
+            "분석 실패: 응답 시간이 초과되었습니다. 잠시 후 다시 시도하거나 네트워크를 확인해 주세요.",
+          );
+          return;
+        }
+      }
+      if (error && typeof error === "object" && "response" in error) {
+        const ax = error as { response?: { data?: { message?: string | string[] } } };
+        const backendError = ax.response?.data;
         const errorMessage = Array.isArray(backendError?.message)
           ? backendError.message[0]
           : backendError?.message;
-        alert(`분석 실패: ${errorMessage || "다시 시도해주세요."}`);
+        alert(`분석 실패: ${errorMessage || "다시 시도해주세요. (로그인 필요)"}`);
+      } else {
+        alert("분석 실패: 다시 시도해주세요.");
       }
     } finally {
       setIsAnalyzing(false);

@@ -13,6 +13,7 @@ export const interviewService = {
     return response.data;
   },
 
+  /** 백엔드 GET /interviews/sessions/:id — 세션 메타 + questions[] */
   async getSession(sessionId: string): Promise<InterviewSession> {
     const response = await apiClient.get<InterviewSession>(
       API_ENDPOINTS.INTERVIEWS.SESSION_BY_ID(sessionId),

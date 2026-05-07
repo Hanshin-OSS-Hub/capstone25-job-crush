@@ -7,6 +7,9 @@ import {
   FaUserPlus,
   FaArrowLeft,
 } from "react-icons/fa";
+import { isAxiosError } from "axios";
+import { apiClient } from "@/api/client";
+import { API_ENDPOINTS } from "@/constants/api";
 
 const SignUpPage = () => {
   const navigate = useNavigate();
@@ -16,17 +19,50 @@ const SignUpPage = () => {
     password: "",
     confirmPassword: "",
   });
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const handleSignUp = (e: React.FormEvent) => {
+  const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMessage(null);
+
     if (formData.password !== formData.confirmPassword) {
-      alert("비밀번호가 일치하지 않습니다.");
+      setErrorMessage("비밀번호가 일치하지 않습니다.");
       return;
     }
 
-    // 💡 회원가입 성공 시나리오 (나중에 API 연결)
-    alert("회원가입이 완료되었습니다! 로그인해 주세요.");
-    navigate("/login");
+    setIsLoading(true);
+    try {
+      await apiClient.post(API_ENDPOINTS.AUTH.REGISTER, {
+        name: formData.name,
+        email: formData.email,
+        password: formData.password,
+      });
+
+      alert("회원가입이 완료되었습니다! 로그인해 주세요.");
+      navigate("/login");
+    } catch (err: unknown) {
+      if (isAxiosError(err)) {
+        if (err.code === 'ERR_NETWORK' || !err.response) {
+          setErrorMessage(
+            '서버에 연결할 수 없습니다. 백엔드(포트 3000)가 켜져 있는지, VITE_API_BASE_URL이 맞는지 확인해 주세요. 휴대폰·LAN IP로 접속 중이면 backend/.env의 CORS_ORIGIN에 해당 주소(예: http://192.168.x.x:5173)를 추가하거나 CORS_ORIGIN=* 로 잠시 허용해 보세요.',
+          );
+        } else {
+          const message = err.response.data?.message;
+          setErrorMessage(
+            Array.isArray(message)
+              ? message.join('\n')
+              : typeof message === 'string'
+                ? message
+                : `회원가입에 실패했습니다. (${err.response.status})`,
+          );
+        }
+      } else {
+        setErrorMessage('네트워크 오류가 발생했습니다.');
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -58,6 +94,12 @@ const SignUpPage = () => {
           </p>
         </div>
 
+        {errorMessage && (
+          <p className="mb-4 whitespace-pre-line text-sm font-medium text-red-600 dark:text-red-400">
+            {errorMessage}
+          </p>
+        )}
+
         <form onSubmit={handleSignUp} className="space-y-4">
           {/* 이름 입력 */}
           <div>
@@ -69,6 +111,7 @@ const SignUpPage = () => {
                 type="text"
                 placeholder="성재열"
                 className="w-full rounded-xl border border-stroke bg-gray-50 py-3.5 pl-12 pr-5 outline-none focus:border-primary focus:bg-white transition-all dark:border-form-strokedark dark:bg-form-input"
+                value={formData.name}
                 onChange={(e) =>
                   setFormData({ ...formData, name: e.target.value })
                 }
@@ -88,6 +131,7 @@ const SignUpPage = () => {
                 type="email"
                 placeholder="example@email.com"
                 className="w-full rounded-xl border border-stroke bg-gray-50 py-3.5 pl-12 pr-5 outline-none focus:border-primary focus:bg-white transition-all dark:border-form-strokedark dark:bg-form-input"
+                value={formData.email}
                 onChange={(e) =>
                   setFormData({ ...formData, email: e.target.value })
                 }
@@ -107,6 +151,7 @@ const SignUpPage = () => {
                 type="password"
                 placeholder="••••••••"
                 className="w-full rounded-xl border border-stroke bg-gray-50 py-3.5 pl-12 pr-5 outline-none focus:border-primary focus:bg-white transition-all dark:border-form-strokedark dark:bg-form-input"
+                value={formData.password}
                 onChange={(e) =>
                   setFormData({ ...formData, password: e.target.value })
                 }
@@ -126,6 +171,7 @@ const SignUpPage = () => {
                 type="password"
                 placeholder="••••••••"
                 className="w-full rounded-xl border border-stroke bg-gray-50 py-3.5 pl-12 pr-5 outline-none focus:border-primary focus:bg-white transition-all dark:border-form-strokedark dark:bg-form-input"
+                value={formData.confirmPassword}
                 onChange={(e) =>
                   setFormData({ ...formData, confirmPassword: e.target.value })
                 }
@@ -137,9 +183,16 @@ const SignUpPage = () => {
 
           <button
             type="submit"
-            className="flex w-full items-center justify-center gap-3 rounded-xl bg-primary py-4.5 mt-6 text-lg font-bold text-white shadow-lg transition hover:bg-opacity-90 active:scale-[0.98]"
+            disabled={isLoading}
+            className="flex w-full items-center justify-center gap-3 rounded-xl bg-primary py-4.5 mt-6 text-lg font-bold text-white shadow-lg transition hover:bg-opacity-90 active:scale-[0.98] disabled:bg-gray-400"
           >
-            <FaUserPlus /> 가입하기
+            {isLoading ? (
+              <span className="animate-pulse">가입 중...</span>
+            ) : (
+              <>
+                <FaUserPlus /> 가입하기
+              </>
+            )}
           </button>
         </form>
 

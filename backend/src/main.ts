@@ -5,15 +5,32 @@ import { AppModule } from './app.module';
 // import { LoggingInterceptor } from './shared/interceptors/logging.interceptor';
 // import { TransformInterceptor } from './shared/interceptors/transform.interceptor';
 
+/** CORS_ORIGIN 쉼표 구분(예: http://localhost:5173,http://127.0.0.1:5173). 비어 있으면 로컬 두 호스트 기본 */
+function parseCorsOrigins(): string[] {
+  const raw = process.env.CORS_ORIGIN?.trim();
+  if (raw && raw !== '*') {
+    return [...new Set(raw.split(',').map((o) => o.trim()).filter(Boolean))];
+  }
+  return ['http://localhost:5173', 'http://127.0.0.1:5173'];
+}
+
+/** true면 요청 Origin을 그대로 허용(모바일/LAN IP로 Vite 접속 시). 프로덕션에서는 CORS_ORIGIN 열거 권장 */
+function corsOriginOption(): true | string[] {
+  if (process.env.CORS_ORIGIN?.trim() === '*') {
+    return true;
+  }
+  return parseCorsOrigins();
+}
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // 전역 파이프 설정 (유효성 검사)
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true, // DTO에 정의되지 않은 속성 제거
-      forbidNonWhitelisted: true, // DTO에 정의되지 않은 속성 거부
-      transform: true, // 요청 데이터를 DTO 인스턴스로 변환
+      whitelist: true, // DTO에 없는 필드는 제거(Prisma로 안 넘어감)
+      // false: confirmPassword 등 프록시/구버전 클라이언트가 실어 보내도 400 나지 않음
+      forbidNonWhitelisted: false,
+      transform: true,
     }),
   );
 
@@ -26,14 +43,15 @@ async function bootstrap() {
   //   new TransformInterceptor(),
   // );
 
-  // CORS 설정
   app.enableCors({
-    origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+    origin: corsOriginOption(),
     credentials: true,
   });
 
-  const port = process.env.PORT ?? 3000;
+  const port = Number(process.env.PORT) || 3000;
   await app.listen(port);
-  console.log(`Application is running on: http://localhost:${port}`);
+  console.log(
+    `Application is running on: http://localhost:${port} | http://127.0.0.1:${port}`,
+  );
 }
 bootstrap();

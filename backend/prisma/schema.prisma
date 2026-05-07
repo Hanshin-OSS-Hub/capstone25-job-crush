@@ -1,0 +1,98 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// 1. 유저 테이블
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  password  String
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  resumes         Resume[]
+  analysisResults AnalysisResult[]
+
+  @@map("users")
+}
+
+// 2. 기업 정보 테이블[cite: 1]
+model Company {
+  id             Int      @id @default(autoincrement())
+  companyName    String   @map("company_name")
+  industry       String
+  jobDescription String   @map("job_description") @db.Text
+  vision         String   @db.Text
+
+  analysisResults AnalysisResult[]
+
+  @@map("companies")
+}
+
+// 3. 자기소개서 테이블[cite: 1]
+model Resume {
+  id          Int      @id @default(autoincrement())
+  userId      Int      @map("user_id")
+  title       String
+  contentText String   @map("content_text") @db.Text
+  pdfUrl      String?  @map("pdf_url")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user            User             @relation(fields: [userId], references: [id])
+  analysisResults AnalysisResult[]
+
+  @@map("resumes")
+}
+
+// 4. 분석 결과 테이블[cite: 1]
+model AnalysisResult {
+  id                Int      @id @default(autoincrement())
+  userId            Int      @map("user_id")
+  resumeId          Int      @map("resume_id")
+  companyId         Int      @map("company_id")
+  totalScore        Int      @map("total_score")
+  overallAssessment Json     @map("overall_assessment")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  user       User       @relation(fields: [userId], references: [id])
+  resume     Resume     @relation(fields: [resumeId], references: [id])
+  company    Company    @relation(fields: [companyId], references: [id])
+  interviews Interview[]
+
+  @@map("analysis_results")
+}
+
+// 5. 면접 세션 테이블[cite: 1]
+model Interview {
+  id         Int      @id @default(autoincrement())
+  analysisId Int      @map("analysis_id")
+  status     String   // e.g., "PENDING", "COMPLETED"
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  analysis          AnalysisResult      @relation(fields: [analysisId], references: [id])
+  interviewQuestions InterviewQuestion[]
+
+  @@map("interviews")
+}
+
+// 6. 면접 질문 테이블[cite: 1]
+model InterviewQuestion {
+  id           Int     @id @default(autoincrement())
+  interviewId  Int     @map("interview_id")
+  questionText String  @map("question_text") @db.Text
+  answerText   String? @map("answer_text") @db.Text
+  intent       String? @db.Text
+  feedback     String? @db.Text
+
+  interview Interview @relation(fields: [interviewId], references: [id])
+
+  @@map("interview_questions")
+}

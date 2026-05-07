@@ -10,6 +10,8 @@ import {
 } from "react-icons/fa";
 import { BiSolidQuoteLeft } from "react-icons/bi";
 import { ROUTES } from "@/constants/routes";
+import { apiClient } from "@/api/client";
+import { API_ENDPOINTS } from "@/constants/api";
 
 // ----------------------------------------------------------------------
 // 1. 데이터 타입 정의 (백엔드 응답 스키마 예상)
@@ -34,6 +36,9 @@ interface AnalysisResult {
   totalScore: number;
   summary: string;
   items: AnalysisItem[];
+  analysisResultId?: number;
+  resumeId?: number;
+  companyId?: number;
 }
 
 // ----------------------------------------------------------------------
@@ -246,7 +251,28 @@ const AnalysisResultPage = () => {
       {/* 3. 하단 플로팅 버튼 (모의 면접 시작) */}
       <div className="fixed bottom-10 left-0 right-0 flex justify-center z-50 pointer-events-none">
         <button
-          onClick={() => navigate(ROUTES.INTERVIEWS.SETUP)} // 나중에 면접 설정 페이지로 이동
+          onClick={async () => {
+            const id = receivedData?.analysisResultId;
+            if (!id) {
+              navigate(ROUTES.INTERVIEWS.SETUP);
+              return;
+            }
+            try {
+              const { data } = await apiClient.post<{ id: number }>(
+                API_ENDPOINTS.INTERVIEWS.FROM_ANALYSIS,
+                { analysisResultId: id },
+              );
+              if (data?.id != null) {
+                navigate(ROUTES.INTERVIEWS.SESSION(String(data.id)));
+              } else {
+                navigate(ROUTES.INTERVIEWS.SETUP);
+              }
+            } catch {
+              alert(
+                "모의 면접 준비 생성에 실패했습니다. 로그인 상태를 확인한 뒤 다시 시도해 주세요.",
+              );
+            }
+          }}
           className="pointer-events-auto flex items-center gap-2 rounded-full bg-primary px-8 py-4 text-lg font-bold text-white shadow-2xl transition-all hover:-translate-y-1 hover:bg-opacity-90 hover:shadow-primary/50"
         >
           <FaCommentDots className="text-xl" />

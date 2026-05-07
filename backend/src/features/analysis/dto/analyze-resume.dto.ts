@@ -1,4 +1,10 @@
-import { IsNotEmpty, IsString, MinLength } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MinLength,
+  MaxLength,
+} from 'class-validator';
 
 export class AnalyzeResumeDto {
   @IsString()
@@ -14,4 +20,9 @@ export class AnalyzeResumeDto {
   @IsNotEmpty()
   @MinLength(50)
   jobDescription: string; // 채용 공고 (JD) 내용
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  resumeTitle?: string;
 }

@@ -18,6 +18,8 @@ export interface InterviewSession {
   completedAt?: string;
   createdAt: string;
   updatedAt: string;
+  /** GET /interviews/sessions/:id 응답에 포함 */
+  questions?: InterviewQuestion[];
 }
 
 export interface InterviewQuestion {
