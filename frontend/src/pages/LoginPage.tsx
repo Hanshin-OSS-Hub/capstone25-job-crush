@@ -1,25 +1,61 @@
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { FaEnvelope, FaLock, FaSignInAlt, FaArrowLeft } from "react-icons/fa";
+import { isAxiosError } from "axios";
+import { apiClient, ACCESS_TOKEN_STORAGE_KEY } from "@/api/client";
+import { API_ENDPOINTS } from "@/constants/api";
+
+type LoginResponse = {
+  accessToken: string;
+  user: { id: number; email: string; name: string };
+};
 
 const LoginPage = () => {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMessage(null);
     setIsLoading(true);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 800));
-      const mockUser = { name: "성재열", email: email };
-      localStorage.setItem("jobcrush_user", JSON.stringify(mockUser));
-      localStorage.setItem("jobcrush_token", "dummy-token-12345");
+      const { data } = await apiClient.post<LoginResponse>(
+        API_ENDPOINTS.AUTH.LOGIN,
+        { email, password },
+      );
+      localStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, data.accessToken);
+      // 레이아웃(헤더 등)과 호환: 기존 키 유지
+      localStorage.setItem(
+        "jobcrush_user",
+        JSON.stringify({
+          id: data.user.id,
+          name: data.user.name,
+          email: data.user.email,
+        }),
+      );
       navigate("/");
-      window.location.reload();
-    } catch (error) {
-      alert("로그인 정보가 올바르지 않습니다.");
+    } catch (err: unknown) {
+      if (isAxiosError<{ message?: string | string[] }>(err)) {
+        const status = err.response?.status;
+        const body = err.response?.data;
+        const msg = body?.message;
+        if (status === 401) {
+          setErrorMessage(
+            typeof msg === "string"
+              ? msg
+              : "이메일 또는 비밀번호가 올바르지 않습니다.",
+          );
+        } else if (typeof msg === "string") {
+          setErrorMessage(msg);
+        } else {
+          setErrorMessage("로그인에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+        }
+      } else {
+        setErrorMessage("네트워크 오류가 발생했습니다.");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -53,6 +89,15 @@ const LoginPage = () => {
             스마트한 취업 준비의 시작
           </p>
         </div>
+
+        {errorMessage && (
+          <div
+            role="alert"
+            className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-900/20 dark:text-red-200"
+          >
+            {errorMessage}
+          </div>
+        )}
 
         <form onSubmit={handleLogin} className="space-y-6">
           <div>

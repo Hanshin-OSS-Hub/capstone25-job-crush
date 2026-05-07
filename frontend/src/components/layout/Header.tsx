@@ -6,6 +6,7 @@ import {
   FaUserCircle,
   FaSignOutAlt,
 } from "react-icons/fa";
+import { ACCESS_TOKEN_STORAGE_KEY } from "@/api/client";
 
 type HeaderProps = {
   sidebarOpen: boolean;
@@ -24,7 +25,7 @@ const Header = (props: HeaderProps) => {
   }, []);
 
   const handleLogout = () => {
-    localStorage.removeItem("jobcrush_token");
+    localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
     localStorage.removeItem("jobcrush_user");
     setUser(null);
     navigate("/login");

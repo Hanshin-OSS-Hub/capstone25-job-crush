@@ -41,11 +41,13 @@ export const API_ENDPOINTS = {
     BY_USER: (userId: string) => `/applications/user/${userId}`,
   },
 
-  // 면접 관련
+  // 면접 (백엔드 연동)
   INTERVIEWS: {
     SESSIONS: '/interviews/sessions',
     SESSION_BY_ID: (sessionId: string) => `/interviews/sessions/${sessionId}`,
-    SESSION_EVALUATION: (sessionId: string) => `/interviews/sessions/${sessionId}/evaluation`,
+    SESSION_EVALUATION: (sessionId: string) =>
+      `/interviews/sessions/${sessionId}/evaluation`,
+    FROM_ANALYSIS: '/interviews/from-analysis',
   },
   
   // 사용자 관련
