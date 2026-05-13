@@ -14,7 +14,6 @@ import {
 import { z } from 'zod';
 import { PrismaService } from '../../database/prisma.service';
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const { PDFParse } = require('pdf-parse');
 
 /** 기본 모델 — Google 문서의 Model code 사용. `gemini-3.1-flash` 같은 이름은 없어 404 남. */
@@ -53,15 +52,15 @@ type ResumeAnalysisOk = {
 type ResumeAnalysisOutcome =
   | ResumeAnalysisOk
   | {
-    blocked: true;
-    body: {
-      companyName: string;
-      jobRole: string;
-      totalScore: number;
-      summary: string;
-      items: unknown[];
+      blocked: true;
+      body: {
+        companyName: string;
+        jobRole: string;
+        totalScore: number;
+        summary: string;
+        items: unknown[];
+      };
     };
-  };
 
 @Injectable()
 export class AnalysisService {
@@ -337,6 +336,35 @@ ${resumeText}
   }
 
   /**
+   * 로그인 사용자 본인의 분석 기록만 조회 (JWT sub와 일치하는 userId만)
+   */
+  async getAnalysisHistoryForUser(userId: number) {
+    const analyses = await this.prisma.analysisResult.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        company: true,
+        resume: true,
+      },
+    });
+
+    const interviewCount = await this.prisma.interview.count({
+      where: { analysis: { userId } },
+    });
+
+    return {
+      analyses: analyses.map((row) => ({
+        id: row.id,
+        companyName: row.company.companyName,
+        resumeTitle: row.resume.title,
+        totalScore: row.totalScore,
+        createdAt: row.createdAt.toISOString(),
+      })),
+      interviewCount,
+    };
+  }
+
+  /**
    * 로그인 사용자 기준: 분석 후 Resume / Company / AnalysisResult 저장
    */
   async analyzeResumeForUser(
@@ -372,7 +400,10 @@ ${resumeText}
     const { resumeId, companyId, analysisResultId } =
       await this.prisma.$transaction(async (tx) => {
         let companyRow = await tx.company.findFirst({
-          where: { companyName: out.companyName, jobDescription: out.jobDescription },
+          where: {
+            companyName: out.companyName,
+            jobDescription: out.jobDescription,
+          },
         });
         if (!companyRow) {
           companyRow = await tx.company.create({
@@ -493,13 +524,18 @@ ${input.assessmentSummary.slice(0, 2000)}
       if (!Array.isArray(qs)) {
         throw new Error('questions');
       }
-      const strings = qs.filter((q): q is string => typeof q === 'string' && q.trim().length > 0);
+      const strings = qs.filter(
+        (q): q is string => typeof q === 'string' && q.trim().length > 0,
+      );
       if (strings.length === 0) {
         throw new Error('empty');
       }
       return strings.slice(0, 8);
     } catch (e) {
-      console.warn('면접 질문 AI 생성 실패, 기본 질문 사용:', this.getErrorMessage(e));
+      console.warn(
+        '면접 질문 AI 생성 실패, 기본 질문 사용:',
+        this.getErrorMessage(e),
+      );
       return [
         `${input.companyName}에 지원한 동기와 입사 후 기여 방안을 말씀해 주세요.`,
         `공고(JD)에서 요구하는 핵심 역량 중 본인에게 가장 잘 맞는 경험을 구체적으로 설명해 주세요.`,
@@ -527,7 +563,8 @@ ${input.assessmentSummary.slice(0, 2000)}
             {
               type: 'bad',
               title: '보안 경고',
-              content: '입력 데이터에서 조작 패턴이 식별되어 처리를 중단했습니다.',
+              content:
+                '입력 데이터에서 조작 패턴이 식별되어 처리를 중단했습니다.',
             },
           ],
         },
@@ -559,11 +596,10 @@ ${input.assessmentSummary.slice(0, 2000)}
     });
 
     try {
-      const truncateForGuard = (
-        text: string,
-        cap: number,
-      ): string => {
-        return text.length > cap ? `${text.slice(0, cap)}\n...[truncated]` : text;
+      const truncateForGuard = (text: string, cap: number): string => {
+        return text.length > cap
+          ? `${text.slice(0, cap)}\n...[truncated]`
+          : text;
       };
       const runGuardCheck = async (
         jdCap: number,
@@ -669,7 +705,9 @@ ${resume}
           'AI 검증 서비스가 일시적으로 불안정합니다. 잠시 후 다시 시도해 주세요.',
         );
       }
-      console.warn('[Guard] 예기치 않은 오류 — 보안 차단 메시지로 위임하지 않음');
+      console.warn(
+        '[Guard] 예기치 않은 오류 — 보안 차단 메시지로 위임하지 않음',
+      );
       throw new InternalServerErrorException(
         `자소서 보안 검증 단계 오류: ${this.getErrorMessage(e)}`,
       );

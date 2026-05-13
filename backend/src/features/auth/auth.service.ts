@@ -4,6 +4,7 @@
 import {
   ConflictException,
   Injectable,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -50,6 +51,17 @@ export class AuthService {
     });
 
     return this.buildTokenResponse(user.id, user.email, user.name);
+  }
+
+  async getProfileById(userId: number): Promise<AuthUserPayload> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true, name: true },
+    });
+    if (!user) {
+      throw new NotFoundException('사용자를 찾을 수 없습니다.');
+    }
+    return user;
   }
 
   async login(dto: LoginDto): Promise<AuthTokensResponse> {
