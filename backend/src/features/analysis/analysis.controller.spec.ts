@@ -16,6 +16,7 @@ describe('AnalysisController', () => {
           useValue: {
             analyzeResumeForUser: jest.fn(),
             extractTextFromPdf: jest.fn(),
+            getAnalysisHistoryForUser: jest.fn(),
           },
         },
       ],

@@ -11,6 +11,7 @@ export const API_ENDPOINTS = {
     REFRESH: '/auth/refresh',
     ME: '/auth/me',
   },
+
   
   // 채용 공고 관련
   JOBS: {
@@ -30,6 +31,7 @@ export const API_ENDPOINTS = {
   // 분석 관련
   ANALYSIS: {
     BASE: '/analysis',
+    HISTORY: '/analysis/history',
     TRENDS: '/analysis/trends',
     SALARY: '/analysis/salary',
   },

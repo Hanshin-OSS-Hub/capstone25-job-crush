@@ -1,4 +1,3 @@
-import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   FaHome,
@@ -6,7 +5,7 @@ import {
   FaUserCircle,
   FaSignOutAlt,
 } from "react-icons/fa";
-import { ACCESS_TOKEN_STORAGE_KEY } from "@/api/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 type HeaderProps = {
   sidebarOpen: boolean;
@@ -15,21 +14,14 @@ type HeaderProps = {
 
 const Header = (props: HeaderProps) => {
   const navigate = useNavigate();
-  const [user, setUser] = useState<{ name: string } | null>(null);
-
-  useEffect(() => {
-    const storedUser = localStorage.getItem("jobcrush_user");
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
-  }, []);
+  const { user, logout } = useAuth();
 
   const handleLogout = () => {
-    localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
-    localStorage.removeItem("jobcrush_user");
-    setUser(null);
-    navigate("/login");
+    logout();
+    navigate("/landing");
   };
+
+  const displayName = user?.name ?? null;
 
   return (
     <header className="sticky top-0 z-999 flex w-full bg-white drop-shadow-1 dark:bg-boxdark dark:drop-shadow-none">
@@ -80,11 +72,11 @@ const Header = (props: HeaderProps) => {
         </div>
 
         <div className="flex items-center gap-3">
-          {user ? (
+          {displayName ? (
             <div className="flex items-center gap-3 sm:gap-4">
               <div className="text-right hidden xsm:block">
                 <p className="text-sm font-bold text-black dark:text-white">
-                  {user.name}님 환영합니다
+                  {displayName}님 환영합니다
                 </p>
                 <p className="text-[10px] text-gray-500 text-right">MEMBER</p>
               </div>

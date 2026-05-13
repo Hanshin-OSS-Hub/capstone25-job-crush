@@ -2,8 +2,9 @@ import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { FaEnvelope, FaLock, FaSignInAlt, FaArrowLeft } from "react-icons/fa";
 import { isAxiosError } from "axios";
-import { apiClient, ACCESS_TOKEN_STORAGE_KEY } from "@/api/client";
+import { apiClient } from "@/api/client";
 import { API_ENDPOINTS } from "@/constants/api";
+import { useAuth } from "@/contexts/AuthContext";
 
 type LoginResponse = {
   accessToken: string;
@@ -12,6 +13,7 @@ type LoginResponse = {
 
 const LoginPage = () => {
   const navigate = useNavigate();
+  const { setSession } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -26,16 +28,7 @@ const LoginPage = () => {
         API_ENDPOINTS.AUTH.LOGIN,
         { email, password },
       );
-      localStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, data.accessToken);
-      // 레이아웃(헤더 등)과 호환: 기존 키 유지
-      localStorage.setItem(
-        "jobcrush_user",
-        JSON.stringify({
-          id: data.user.id,
-          name: data.user.name,
-          email: data.user.email,
-        }),
-      );
+      setSession(data.user, data.accessToken);
       navigate("/");
     } catch (err: unknown) {
       if (isAxiosError<{ message?: string | string[] }>(err)) {

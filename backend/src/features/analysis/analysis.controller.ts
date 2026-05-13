@@ -44,6 +44,12 @@ export class AnalysisController {
     return { url: `${base}/analysis` };
   }
 
+  @Get('history')
+  @UseGuards(JwtAuthGuard)
+  async getHistory(@CurrentUser('sub') userId: number) {
+    return this.analysisService.getAnalysisHistoryForUser(userId);
+  }
+
   @Post('resume')
   @UseGuards(ThrottlerGuard, JwtAuthGuard)
   async analyzeResume(

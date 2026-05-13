@@ -1,5 +1,7 @@
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import type { ReactNode } from "react";
 import DefaultLayout from "../components/layout/DefaultLayout";
+import ProtectedRoute from "../components/auth/ProtectedRoute";
 import MainDashboardPage from "../features/dashboard/MainDashboardPage";
 import ResumeAnalysisPage from "../features/analysis/ResumeAnalysisPage";
 import AnalysisResultPage from "../features/analysis/AnalysisResultPage";
@@ -10,70 +12,98 @@ import InterviewResultPage from "../pages/interviews/InterviewResultPage";
 import LoginPage from "../pages/LoginPage";
 import SignUpPage from "../pages/SignUpPage";
 import SettingsPage from "../pages/SettingsPage";
+import LandingPage from "../pages/LandingPage";
+import { useAuth } from "../contexts/AuthContext";
+
+function RootHome() {
+  const { user, isLoading } = useAuth();
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-white">
+        <div
+          className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent"
+          aria-label="로딩 중"
+        />
+      </div>
+    );
+  }
+  if (!user) {
+    return <LandingPage />;
+  }
+  return (
+    <DefaultLayout>
+      <MainDashboardPage />
+    </DefaultLayout>
+  );
+}
+
+function ProtectedLayout({ children }: { children: ReactNode }) {
+  return (
+    <ProtectedRoute>
+      <DefaultLayout>{children}</DefaultLayout>
+    </ProtectedRoute>
+  );
+}
 
 const router = createBrowserRouter([
   {
     path: "/",
-    element: (
-      <DefaultLayout>
-        <MainDashboardPage />
-      </DefaultLayout>
-    ),
+    element: <RootHome />,
   },
   {
     path: "/analysis",
     element: (
-      <DefaultLayout>
+      <ProtectedLayout>
         <ResumeAnalysisPage />
-      </DefaultLayout>
+      </ProtectedLayout>
     ),
   },
   {
     path: "/analysis/result",
     element: (
-      <DefaultLayout>
+      <ProtectedLayout>
         <AnalysisResultPage />
-      </DefaultLayout>
+      </ProtectedLayout>
     ),
   },
   {
     path: "/history",
     element: (
-      <DefaultLayout>
+      <ProtectedLayout>
         <AnalysisHistoryPage />
-      </DefaultLayout>
+      </ProtectedLayout>
     ),
   },
   {
     path: "/interviews/setup",
     element: (
-      <DefaultLayout>
+      <ProtectedLayout>
         <InterviewSetupPage />
-      </DefaultLayout>
+      </ProtectedLayout>
     ),
   },
   {
     path: "/interviews/session/:sessionId",
     element: (
-      <DefaultLayout>
+      <ProtectedLayout>
         <InterviewSessionPage />
-      </DefaultLayout>
+      </ProtectedLayout>
     ),
   },
   {
     path: "/interviews/result/:sessionId",
     element: (
-      <DefaultLayout>
+      <ProtectedLayout>
         <InterviewResultPage />
-      </DefaultLayout>
+      </ProtectedLayout>
     ),
   },
   {
     path: "/settings",
     element: (
-      <DefaultLayout>
+      <ProtectedLayout>
         <SettingsPage />
-      </DefaultLayout>
+      </ProtectedLayout>
     ),
   },
   {
@@ -83,6 +113,10 @@ const router = createBrowserRouter([
   {
     path: "/signup",
     element: <SignUpPage />,
+  },
+  {
+    path: "/landing",
+    element: <LandingPage />,
   },
 ]);
 

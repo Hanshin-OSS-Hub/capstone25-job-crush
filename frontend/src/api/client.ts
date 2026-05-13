@@ -7,6 +7,24 @@ import type { AxiosInstance, AxiosResponse, InternalAxiosRequestConfig } from 'a
 
 /** localStorage 키 — 로그인 성공 시 저장되는 JWT와 요청 인터셉터가 동일하게 사용 */
 export const ACCESS_TOKEN_STORAGE_KEY = 'accessToken';
+/** 과제·문서에서 쓰는 별칭 키(값은 accessToken과 동일하게 유지) */
+export const JOBCRUSH_TOKEN_KEY = 'jobcrush_token';
+
+export function getStoredAccessToken(): string | null {
+  const primary = localStorage.getItem(JOBCRUSH_TOKEN_KEY);
+  if (primary) return primary;
+  return localStorage.getItem(ACCESS_TOKEN_STORAGE_KEY);
+}
+
+export function persistAccessToken(token: string): void {
+  localStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, token);
+  localStorage.setItem(JOBCRUSH_TOKEN_KEY, token);
+}
+
+export function clearStoredAccessToken(): void {
+  localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
+  localStorage.removeItem(JOBCRUSH_TOKEN_KEY);
+}
 
 // 전역 API 베이스 URL 설정
 // 환경 변수 VITE_API_BASE_URL이 설정되어 있으면 사용하고, 없으면 기본값 사용
@@ -28,7 +46,7 @@ function isAuthLoginOrRegister(config: InternalAxiosRequestConfig): boolean {
 // 요청 인터셉터: 저장된 JWT가 있으면 Authorization 헤더 자동 부착
 apiClient.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem(ACCESS_TOKEN_STORAGE_KEY);
+    const token = getStoredAccessToken();
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -60,8 +78,9 @@ apiClient.interceptors.response.use(
         case 401:
           // 로그인/회원가입 요청의 401은 페이지에 에러로 넘기고, 보호 API만 로그아웃 처리
           if (!onLoginOrRegister) {
-            localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
-            window.location.href = '/login';
+            clearStoredAccessToken();
+            localStorage.removeItem('jobcrush_user');
+            window.location.href = '/landing';
           }
           break;
         case 403:

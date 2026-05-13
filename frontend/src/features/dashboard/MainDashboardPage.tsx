@@ -1,64 +1,142 @@
 // frontend/src/features/dashboard/MainDashboardPage.tsx
 
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { isAxiosError } from "axios";
 import { SiBookstack } from "react-icons/si";
 import { FaTrophy, FaMicrophone, FaCalendar } from "react-icons/fa";
-
-// 👇 공용 컴포넌트 및 타입 import (경로 확인 필요)
 import AnalysisCard, {
   type AnalysisData,
 } from "../../components/ui/AnalysisCard";
+import { apiClient, getStoredAccessToken } from "@/api/client";
+import { API_ENDPOINTS } from "@/constants/api";
+import { useAuth } from "@/contexts/AuthContext";
 
-// ----------------------------------------------------------------------
-// 1. 가짜 데이터 (Mock Data)
-// ----------------------------------------------------------------------
-const mockAnalysisData: AnalysisData[] = [
-  {
-    id: 1,
-    company: "네이버",
-    role: "프론트엔드 개발자",
-    logoBgColor: "bg-blue-50",
-    logoTextColor: "text-blue-600",
-    status: "완료",
-    fitScore: "85점",
-    jobScore: "78점",
-    date: "2024.01.15",
-  },
-  {
-    id: 2,
-    company: "카카오",
-    role: "백엔드 개발자",
-    logoBgColor: "bg-red-50",
-    logoTextColor: "text-red-500",
-    status: "완료",
-    fitScore: "72점",
-    jobScore: "84점",
-    date: "2024.01.12",
-  },
-  {
-    id: 3,
-    company: "삼성전자",
-    role: "소프트웨어 엔지니어",
-    logoBgColor: "bg-green-50",
-    logoTextColor: "text-green-600",
-    status: "진행중",
-    fitScore: "분석중...",
-    jobScore: "분석중...",
-    date: "2024.01.18",
-  },
+type AnalysisHistoryItem = {
+  id: number;
+  companyName: string;
+  resumeTitle: string;
+  totalScore: number;
+  createdAt: string;
+};
+
+type AnalysisHistoryResponse = {
+  analyses: AnalysisHistoryItem[];
+  interviewCount: number;
+};
+
+const PALETTE: Pick<AnalysisData, "logoBgColor" | "logoTextColor">[] = [
+  { logoBgColor: "bg-blue-50", logoTextColor: "text-blue-600" },
+  { logoBgColor: "bg-red-50", logoTextColor: "text-red-500" },
+  { logoBgColor: "bg-green-50", logoTextColor: "text-green-600" },
+  { logoBgColor: "bg-cyan-50", logoTextColor: "text-cyan-600" },
+  { logoBgColor: "bg-orange-50", logoTextColor: "text-orange-600" },
+  { logoBgColor: "bg-purple-50", logoTextColor: "text-purple-600" },
 ];
 
-// ----------------------------------------------------------------------
-// 2. 메인 페이지 컴포넌트
-// ----------------------------------------------------------------------
+function formatDashboardDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}.${m}.${day}`;
+}
+
+function mapHistoryToCards(rows: AnalysisHistoryItem[]): AnalysisData[] {
+  return rows.map((row, i) => {
+    const pal = PALETTE[i % PALETTE.length]!;
+    const scoreLabel = `${row.totalScore}점`;
+    return {
+      id: row.id,
+      company: row.companyName,
+      role: row.resumeTitle,
+      logoBgColor: pal.logoBgColor,
+      logoTextColor: pal.logoTextColor,
+      status: "완료",
+      fitScore: scoreLabel,
+      jobScore: scoreLabel,
+      date: formatDashboardDate(row.createdAt),
+    };
+  });
+}
+
 const MainDashboardPage: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const [analyses, setAnalyses] = useState<AnalysisHistoryItem[]>([]);
+  const [interviewCount, setInterviewCount] = useState(0);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const token = getStoredAccessToken();
+
+    const load = async () => {
+      if (!token) {
+        setAnalyses([]);
+        setInterviewCount(0);
+        setHistoryLoading(false);
+        return;
+      }
+      setHistoryLoading(true);
+      setHistoryError(null);
+      try {
+        const { data } = await apiClient.get<AnalysisHistoryResponse>(
+          API_ENDPOINTS.ANALYSIS.HISTORY,
+          { headers: { Authorization: `Bearer ${token}` } },
+        );
+        if (!cancelled) {
+          setAnalyses(data.analyses);
+          setInterviewCount(data.interviewCount);
+        }
+      } catch (err: unknown) {
+        if (!cancelled) {
+          if (isAxiosError(err)) {
+            setHistoryError("분석 기록을 불러오지 못했습니다.");
+          } else {
+            setHistoryError("분석 기록을 불러오지 못했습니다.");
+          }
+          setAnalyses([]);
+        }
+      } finally {
+        if (!cancelled) setHistoryLoading(false);
+      }
+    };
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const displayName = user?.name?.trim() || "회원";
+
+  const stats = useMemo(() => {
+    const total = analyses.length;
+    const sum = analyses.reduce((acc, a) => acc + a.totalScore, 0);
+    const avg = total > 0 ? Math.round(sum / total) : 0;
+    const now = new Date();
+    const ym = `${now.getFullYear()}-${now.getMonth()}`;
+    const thisMonth = analyses.filter((a) => {
+      const d = new Date(a.createdAt);
+      return `${d.getFullYear()}-${d.getMonth()}` === ym;
+    }).length;
+    return { total, avg, thisMonth };
+  }, [analyses]);
+
+  const cardData = useMemo(
+    () => mapHistoryToCards(analyses.slice(0, 6)),
+    [analyses],
+  );
 
   return (
     <div className="flex flex-col gap-8 p-6 md:p-8 2xl:p-10">
-      {/* 1. 상단 '새로운 자소서 분석' 섹션 */}
       <div className="bg-white dark:bg-boxdark rounded-lg p-6 md:p-8 shadow-default">
+        <p className="text-lg font-semibold text-primary mb-2">
+          {displayName}님, 환영합니다
+        </p>
         <h1 className="text-xl font-bold text-black dark:text-white mb-6">
           새로운 자소서 분석을 시작하세요
         </h1>
@@ -66,6 +144,7 @@ const MainDashboardPage: React.FC = () => {
           AI가 당신의 자소서를 분석하고 맞춤형 피드백을 제공합니다
         </h4>
         <button
+          type="button"
           onClick={() => navigate("/analysis")}
           className="inline-flex items-center justify-center gap-2 rounded-md border border-primary py-3 px-6 text-center font-medium text-primary hover:bg-primary hover:text-white transition-all"
         >
@@ -73,29 +152,29 @@ const MainDashboardPage: React.FC = () => {
         </button>
       </div>
 
-      {/* 2. 통계 카드 섹션 (정적) */}
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        {/* 총 분석 횟수 */}
         <div className="rounded-lg border border-stroke bg-white dark:bg-boxdark py-6 px-7.5 shadow-default">
           <h4 className="text-title-md font-semibold text-black dark:text-white">
             총 분석 횟수
           </h4>
           <div className="mt-4 flex items-end justify-between">
-            <p className="text-3xl font-bold text-black dark:text-white">13</p>
+            <p className="text-3xl font-bold text-black dark:text-white">
+              {stats.total}
+            </p>
             <div className="h-9 w-9 rounded-md bg-blue-100 text-blue-600 flex items-center justify-center">
               <SiBookstack className="h-5 w-5" />
             </div>
           </div>
         </div>
 
-        {/* 평균 점수 */}
         <div className="rounded-lg border border-stroke bg-white dark:bg-boxdark py-6 px-7.5 shadow-default">
           <h4 className="text-title-md font-semibold text-black dark:text-white">
             평균 점수
           </h4>
           <div className="mt-4 flex items-end justify-between">
             <p className="text-3xl font-bold text-black dark:text-white">
-              71<span className="text-sm">점</span>
+              {stats.total > 0 ? stats.avg : "—"}
+              {stats.total > 0 ? <span className="text-sm">점</span> : null}
             </p>
             <div className="h-9 w-9 rounded-md bg-green-100 text-green-600 flex items-center justify-center">
               <FaTrophy />
@@ -103,14 +182,14 @@ const MainDashboardPage: React.FC = () => {
           </div>
         </div>
 
-        {/* 면접 연습 */}
         <div className="rounded-lg border border-stroke bg-white dark:bg-boxdark py-6 px-7.5 shadow-default">
           <h4 className="text-title-md font-semibold text-black dark:text-white">
             면접 연습
           </h4>
           <div className="mt-4 flex items-end justify-between">
             <p className="text-3xl font-bold text-black dark:text-white">
-              3<span className="text-sm">회</span>
+              {interviewCount}
+              <span className="text-sm">회</span>
             </p>
             <div className="h-9 w-9 rounded-md bg-purple-100 text-purple-600 flex items-center justify-center">
               <FaMicrophone />
@@ -118,13 +197,14 @@ const MainDashboardPage: React.FC = () => {
           </div>
         </div>
 
-        {/* 이번 달 분석 */}
         <div className="rounded-lg border border-stroke bg-white dark:bg-boxdark py-6 px-7.5 shadow-default">
           <h4 className="text-title-md font-semibold text-black dark:text-white">
             이번 달 분석
           </h4>
           <div className="mt-4 flex items-end justify-between">
-            <p className="text-3xl font-bold text-black dark:text-white">5</p>
+            <p className="text-3xl font-bold text-black dark:text-white">
+              {stats.thisMonth}
+            </p>
             <div className="h-9 w-9 rounded-md bg-orange-100 text-orange-600 flex items-center justify-center">
               <FaCalendar />
             </div>
@@ -132,13 +212,13 @@ const MainDashboardPage: React.FC = () => {
         </div>
       </div>
 
-      {/* 3. 최근 분석 기록 섹션 (재사용 컴포넌트 적용!) */}
       <div className="flex flex-col gap-6">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-bold text-black dark:text-white">
             최근 분석 기록
           </h2>
           <button
+            type="button"
             onClick={() => navigate("/history")}
             className="text-sm font-medium text-primary hover:underline"
           >
@@ -146,11 +226,24 @@ const MainDashboardPage: React.FC = () => {
           </button>
         </div>
 
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {mockAnalysisData.map((data) => (
-            <AnalysisCard key={data.id} data={data} />
-          ))}
-        </div>
+        {historyError ? (
+          <p className="text-sm text-meta-1">{historyError}</p>
+        ) : null}
+        {historyLoading ? (
+          <div className="flex justify-center py-12">
+            <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+          </div>
+        ) : cardData.length === 0 ? (
+          <p className="text-sm text-body py-6">
+            아직 분석 기록이 없습니다. 위에서 새 분석을 시작해 보세요.
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {cardData.map((data) => (
+              <AnalysisCard key={data.id} data={data} />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
