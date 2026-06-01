@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseIntPipe,
@@ -43,14 +44,31 @@ export class InterviewsController {
     );
   }
 
-  /** 턴 처리: 답변 오디오 업로드 → STT → 다음 질문 반환 */
+  /** 사용자의 면접 목록 (분석기록 → 면접 기록) */
+  @Get()
+  @UseGuards(JwtAuthGuard)
+  async listInterviews(@CurrentUser('sub') userId: number) {
+    return this.interviewsService.listForUser(userId);
+  }
+
+  /** 면접 기록 삭제 (평가/질문 포함) */
+  @Delete(':id')
+  @UseGuards(JwtAuthGuard)
+  async deleteInterview(
+    @CurrentUser('sub') userId: number,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.interviewsService.deleteForUser(userId, id);
+  }
+
+  /** 턴 처리: 답변 영상(+오디오) 세그먼트 업로드 → STT + 다음 질문 반환 */
   @Post('sessions/:id/answer')
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(
-    FileInterceptor('audio', {
-      limits: { fileSize: 25 * 1024 * 1024 }, // 답변 오디오 최대 25MB
+    FileInterceptor('media', {
+      limits: { fileSize: 100 * 1024 * 1024 }, // 답변 세그먼트(영상+오디오) 최대 100MB
       fileFilter: (_req, file, cb) => {
-        cb(null, /^audio\//.test(file.mimetype));
+        cb(null, /^(audio|video)\//.test(file.mimetype));
       },
     }),
   )
@@ -61,7 +79,7 @@ export class InterviewsController {
     @Body() dto: SubmitAnswerDto,
   ) {
     if (!file || !file.buffer) {
-      throw new BadRequestException('답변 오디오가 업로드되지 않았습니다.');
+      throw new BadRequestException('답변 미디어가 업로드되지 않았습니다.');
     }
     return this.interviewsService.submitAnswer(
       userId,
@@ -72,31 +90,14 @@ export class InterviewsController {
     );
   }
 
-  /** 세션 종료: 전체 영상 업로드 → 비동기 종합 분석 시작 */
-  @Post('sessions/:id/complete')
+  /** 세션 종료: 답변별 지표를 집계해 종합 평가를 비동기로 시작 (영상 업로드 없음) */
+  @Post('sessions/:id/finalize')
   @UseGuards(JwtAuthGuard)
-  @UseInterceptors(
-    FileInterceptor('video', {
-      limits: { fileSize: 200 * 1024 * 1024 }, // 세션 영상 최대 200MB
-      fileFilter: (_req, file, cb) => {
-        cb(null, /^video\//.test(file.mimetype));
-      },
-    }),
-  )
-  async completeSession(
+  async finalizeSession(
     @CurrentUser('sub') userId: number,
     @Param('id', ParseIntPipe) id: number,
-    @UploadedFile() file: MulterFile,
   ) {
-    if (!file || !file.buffer) {
-      throw new BadRequestException('면접 영상이 업로드되지 않았습니다.');
-    }
-    return this.interviewsService.completeSession(
-      userId,
-      id,
-      file.buffer,
-      file.originalname || 'session.webm',
-    );
+    return this.interviewsService.finalizeSession(userId, id);
   }
 
   /** 결과 페이지 폴링: 종합 평가 조회 (분석 중이면 evaluation=null) */

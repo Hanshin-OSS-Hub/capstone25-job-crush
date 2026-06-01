@@ -2,6 +2,7 @@ import {
   Controller,
   Post,
   Get,
+  Delete,
   Body,
   Param,
   ParseIntPipe,
@@ -54,6 +55,16 @@ export class AnalysisController {
     @Param('id', ParseIntPipe) id: number,
   ) {
     return this.analysisService.getByIdForUser(userId, id);
+  }
+
+  /** 분석 결과 삭제 (연결된 면접도 함께 삭제) */
+  @Delete(':id')
+  @UseGuards(JwtAuthGuard)
+  async deleteAnalysis(
+    @CurrentUser('sub') userId: number,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.analysisService.deleteForUser(userId, id);
   }
 
   /**

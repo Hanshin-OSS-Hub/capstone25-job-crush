@@ -4,6 +4,7 @@ import { API_ENDPOINTS } from '@/constants/api';
 import type {
   CreateInterviewSessionPayload,
   InterviewEvaluationResponse,
+  InterviewListItem,
   InterviewSession,
   SubmitAnswerResponse,
 } from '../types/interview.types';
@@ -22,14 +23,14 @@ export const interviewService = {
     return response.data;
   },
 
-  /** 턴 처리: 답변 오디오 업로드 → STT 결과 + 다음 질문 */
+  /** 턴 처리: 답변 영상(+오디오) 세그먼트 업로드 → STT 결과 + 다음 질문 */
   async submitAnswer(
     sessionId: string,
     questionId: string,
-    audio: Blob,
+    media: Blob,
   ): Promise<SubmitAnswerResponse> {
     const form = new FormData();
-    form.append('audio', audio, 'answer.webm');
+    form.append('media', media, 'answer.webm');
     form.append('questionId', questionId);
     const response = await apiClient.post<SubmitAnswerResponse>(
       API_ENDPOINTS.INTERVIEWS.SESSION_ANSWER(sessionId),
@@ -39,14 +40,12 @@ export const interviewService = {
     return response.data;
   },
 
-  /** 세션 종료: 전체 영상 업로드 → 비동기 종합 분석 시작 */
-  async completeSession(sessionId: string, video: Blob): Promise<{ status: string }> {
-    const form = new FormData();
-    form.append('video', video, 'session.webm');
+  /** 세션 종료: 답변별 지표 집계 → 비동기 종합 분석 시작 (영상 업로드 없음) */
+  async finalizeSession(sessionId: string): Promise<{ status: string }> {
     const response = await apiClient.post<{ status: string }>(
-      API_ENDPOINTS.INTERVIEWS.SESSION_COMPLETE(sessionId),
-      form,
-      { timeout: 120000 },
+      API_ENDPOINTS.INTERVIEWS.SESSION_FINALIZE(sessionId),
+      {},
+      { timeout: 30000 },
     );
     return response.data;
   },
@@ -56,5 +55,18 @@ export const interviewService = {
       API_ENDPOINTS.INTERVIEWS.SESSION_EVALUATION(sessionId),
     );
     return response.data;
+  },
+
+  /** 면접 목록 (분석기록 → 면접 기록) */
+  async listSessions(): Promise<InterviewListItem[]> {
+    const response = await apiClient.get<InterviewListItem[]>(
+      API_ENDPOINTS.INTERVIEWS.LIST,
+    );
+    return response.data;
+  },
+
+  /** 면접 기록 삭제 */
+  async deleteSession(sessionId: string): Promise<void> {
+    await apiClient.delete(API_ENDPOINTS.INTERVIEWS.BY_ID(sessionId));
   },
 };

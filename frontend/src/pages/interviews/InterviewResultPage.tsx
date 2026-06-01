@@ -5,10 +5,96 @@ import EvaluationChart from '@/features/interviews/components/EvaluationChart';
 import StrengthsWeaknesses from '@/features/interviews/components/StrengthsWeaknesses';
 import TimelineView from '@/features/interviews/components/TimelineView';
 import { interviewService } from '@/features/interviews/services/interview.service';
-import type { InterviewEvaluationResponse } from '@/features/interviews/types/interview.types';
+import type {
+  InterviewEvaluationResponse,
+  InterviewProgress,
+} from '@/features/interviews/types/interview.types';
 
 const POLL_INTERVAL_MS = 4000;
 const PENDING_STATUSES = ['PENDING', 'IN_PROGRESS', 'PROCESSING'];
+
+type StepState = 'done' | 'pending' | 'failed';
+
+/** 단일 단계 표시 행 (✓ / 진행중 스피너 / 실패). */
+const StepRow = ({ label, state }: { label: string; state: StepState }) => {
+  const icon =
+    state === 'done' ? (
+      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-success/15 text-xs font-bold text-success">
+        ✓
+      </span>
+    ) : state === 'failed' ? (
+      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-danger/15 text-xs font-bold text-danger">
+        !
+      </span>
+    ) : (
+      <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+    );
+  return (
+    <div className="flex items-center gap-3 py-1.5">
+      <span className="flex w-5 justify-center">{icon}</span>
+      <span
+        className={`text-sm ${
+          state === 'done'
+            ? 'text-black dark:text-white'
+            : state === 'failed'
+              ? 'text-danger'
+              : 'text-gray-500 dark:text-gray-400'
+        }`}
+      >
+        {label}
+      </span>
+    </div>
+  );
+};
+
+/** 질문별 분석 + 종합 평가 진행 체크리스트. */
+const ProgressChecklist = ({
+  progress,
+  evaluated,
+}: {
+  progress: InterviewProgress | null;
+  evaluated: boolean;
+}) => {
+  if (!progress) return null;
+  const answered = progress.questions.filter((q) => q.answered);
+
+  return (
+    <div className="w-full max-w-lg rounded-2xl border border-stroke bg-white p-6 text-left shadow-sm dark:border-strokedark dark:bg-boxdark">
+      <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-primary">
+        분석 진행 상황
+      </p>
+      <div className="flex flex-col divide-y divide-stroke dark:divide-strokedark">
+        {answered.length === 0 && (
+          <p className="py-2 text-sm text-gray-500">기록된 답변이 없습니다.</p>
+        )}
+        {answered.map((q) => {
+          const mediaState: StepState =
+            q.mediaStatus === 'done'
+              ? 'done'
+              : q.mediaStatus === 'failed'
+                ? 'failed'
+                : 'pending';
+          const label =
+            q.type === 'follow_up' ? `꼬리질문 (Q${q.order})` : `질문 ${q.order}`;
+          return (
+            <div key={q.id} className="py-2">
+              <p className="mb-1 truncate text-sm font-medium text-black dark:text-white">
+                {label}
+              </p>
+              <div className="pl-2">
+                <StepRow label="답변 텍스트 변환(STT)" state={q.answered ? 'done' : 'pending'} />
+                <StepRow label="표정·음성·심박 분석" state={mediaState} />
+              </div>
+            </div>
+          );
+        })}
+        <div className="py-2">
+          <StepRow label="AI 종합 평가" state={evaluated ? 'done' : 'pending'} />
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const InterviewResultPage = () => {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -48,6 +134,7 @@ const InterviewResultPage = () => {
 
   const evaluation = data?.evaluation ?? null;
   const status = data?.status?.toUpperCase() ?? '';
+  const progress = data?.progress ?? null;
   const isProcessing = !evaluation && PENDING_STATUSES.includes(status);
   const isFailed = status === 'FAILED';
 
@@ -75,12 +162,14 @@ const InterviewResultPage = () => {
       )}
 
       {!isLoading && !error && isProcessing && (
-        <div className="flex flex-col items-center gap-4 py-20">
-          <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-          <p className="text-sm text-gray-600 dark:text-gray-300">
-            AI가 면접 영상과 답변을 분석하고 있습니다. 잠시만 기다려 주세요…
-          </p>
-          <p className="text-xs text-gray-400">분석에는 영상 길이에 따라 수십 초가 걸릴 수 있습니다.</p>
+        <div className="flex flex-col items-center gap-6 py-12">
+          <div className="flex flex-col items-center gap-3">
+            <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+            <p className="text-sm text-gray-600 dark:text-gray-300">
+              AI가 답변과 비언어 데이터를 분석하고 있습니다. 잠시만 기다려 주세요…
+            </p>
+          </div>
+          <ProgressChecklist progress={progress} evaluated={false} />
         </div>
       )}
 

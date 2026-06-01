@@ -1,5 +1,5 @@
 import React from "react";
-import { FaBuilding } from "react-icons/fa";
+import { FaBuilding, FaTrashAlt } from "react-icons/fa";
 
 // 타입 정의도 공용으로 쓰기 위해 export 합니다.
 export interface AnalysisData {
@@ -17,9 +17,11 @@ export interface AnalysisData {
 const AnalysisCard = ({
   data,
   onClick,
+  onDelete,
 }: {
   data: AnalysisData;
   onClick?: () => void;
+  onDelete?: () => void;
 }) => {
   const statusBadgeClass =
     data.status === "완료"
@@ -45,11 +47,27 @@ const AnalysisCard = ({
             <p className="text-sm font-medium text-body">{data.role}</p>
           </div>
         </div>
-        <span
-          className={`inline-flex rounded-full bg-opacity-10 px-3 py-1 text-sm font-medium ${statusBadgeClass}`}
-        >
-          {data.status}
-        </span>
+        <div className="flex items-center gap-2">
+          <span
+            className={`inline-flex rounded-full bg-opacity-10 px-3 py-1 text-sm font-medium ${statusBadgeClass}`}
+          >
+            {data.status}
+          </span>
+          {onDelete && (
+            <button
+              type="button"
+              aria-label="삭제"
+              title="삭제"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+              className="flex h-8 w-8 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-danger/10 hover:text-danger"
+            >
+              <FaTrashAlt className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex flex-col gap-2 mb-6">

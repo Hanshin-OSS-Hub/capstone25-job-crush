@@ -4,7 +4,13 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { AnalysisService } from '../analysis/analysis.service';
-import { MlService, VideoAnalysisResult } from '../../shared/ml/ml.service';
+import {
+  MlService,
+  VideoAnalysisResult,
+  FaceMetricsResult,
+  VoiceMetricsResult,
+  HeartRateResult,
+} from '../../shared/ml/ml.service';
 
 /** 답변 제출 응답: STT 결과 + 다음 질문(없으면 null) */
 export type SubmitAnswerResult = {
@@ -17,9 +23,25 @@ export type SubmitAnswerResult = {
   } | null;
 };
 
+/** 분석 단계별 진행 상황 (결과 페이지 체크리스트용) */
+export type InterviewProgress = {
+  status: string;
+  evaluated: boolean;
+  questions: Array<{
+    id: string;
+    order: number;
+    type: 'initial' | 'follow_up';
+    text: string;
+    answered: boolean; // STT(답변 텍스트) 완료
+    mediaAnalyzed: boolean; // 표정/음성/심박 분석 완료
+    mediaStatus: 'idle' | 'pending' | 'done' | 'failed';
+  }>;
+};
+
 /** 면접 평가 조회 응답 (결과 페이지 폴링용) */
 export type InterviewEvaluationResult = {
   status: string; // PENDING | IN_PROGRESS | PROCESSING | COMPLETED | FAILED
+  progress: InterviewProgress;
   evaluation: {
     sessionId: string;
     overallScore: number;
@@ -34,6 +56,17 @@ export type InterviewEvaluationResult = {
     timeline: Array<{ id: string; question: string; score: number; feedback: string }>;
     createdAt: string;
   } | null;
+};
+
+/** 면접 목록 항목 (분석기록 → 면접 기록) */
+export type InterviewListItem = {
+  id: string;
+  companyName: string;
+  jobTitle: string;
+  status: string;
+  overallScore: number | null;
+  createdAt: string;
+  completedAt: string | null;
 };
 
 /** 프론트 Session + 질문 목록에 맞춘 조회 응답 (스네이크 미사용, ISO 문자열) */
@@ -218,7 +251,7 @@ export class InterviewsService {
     userId: number,
     interviewId: number,
     questionId: number,
-    audio: Buffer,
+    media: Buffer,
     filename: string,
   ): Promise<SubmitAnswerResult> {
     const interview = await this.getOwnedInterviewOrThrow(userId, interviewId);
@@ -229,13 +262,17 @@ export class InterviewsService {
       throw new NotFoundException('해당 질문을 찾을 수 없습니다.');
     }
 
-    const stt = await this.mlService.transcribe(audio, filename);
+    // 답변 세그먼트(영상+오디오)에서 STT를 먼저 받아 꼬리질문 판단에 사용한다.
+    const stt = await this.mlService.transcribe(media, filename);
     const transcript = stt.transcript ?? '';
 
     await this.prisma.interviewQuestion.update({
       where: { id: question.id },
       data: { answerText: transcript, transcript },
     });
+
+    // 표정/음성/심박 분석은 다음 질문 진행을 막지 않도록 백그라운드로 돌린다.
+    void this.analyzeAnswerMedia(question.id, media, filename);
 
     // 첫 답변이면 세션 진행 상태 기록
     if (!interview.startedAt) {
@@ -304,15 +341,46 @@ export class InterviewsService {
     };
   }
 
+  /** 답변별 영상 세그먼트의 표정/음성/심박 분석 → 질문 mediaMetrics 저장 (백그라운드). */
+  private async analyzeAnswerMedia(
+    questionId: number,
+    media: Buffer,
+    filename: string,
+  ): Promise<void> {
+    try {
+      const analysis = await this.mlService.analyzeVideo(media, filename);
+      const metrics = {
+        status: 'done',
+        face: analysis.face,
+        voice: analysis.voice ?? null,
+        heartRate: analysis.heartRate,
+      } as unknown as Prisma.InputJsonValue;
+      await this.prisma.interviewQuestion.update({
+        where: { id: questionId },
+        data: { mediaMetrics: metrics },
+      });
+    } catch (error) {
+      this.logger.warn(
+        `답변 영상 분석 실패 (question ${questionId}): ${String(error)}`,
+      );
+      await this.prisma.interviewQuestion
+        .update({
+          where: { id: questionId },
+          data: {
+            mediaMetrics: { status: 'failed' } as unknown as Prisma.InputJsonValue,
+          },
+        })
+        .catch(() => undefined);
+    }
+  }
+
   /**
-   * 세션 종료: 전체 영상 수신 후 무거운 멀티모달 분석을 비동기로 시작.
-   * 즉시 PROCESSING 상태를 반환하고, 분석 완료 시 InterviewEvaluation을 저장한다.
+   * 세션 종료(집계): 답변별로 이미 분석된 지표를 모아 Gemini 종합 평가를 만든다.
+   * 통영상 분석을 하지 않으므로 빠르고, 즉시 PROCESSING을 반환한다.
    */
-  async completeSession(
+  async finalizeSession(
     userId: number,
     interviewId: number,
-    video: Buffer,
-    filename: string,
   ): Promise<{ status: string }> {
     const interview = await this.getOwnedInterviewOrThrow(userId, interviewId);
 
@@ -321,20 +389,120 @@ export class InterviewsService {
       data: { status: 'PROCESSING', completedAt: new Date() },
     });
 
-    // 큐 도입(Phase 7) 전까지는 in-process 백그라운드로 처리한다.
-    void this.runHeavyAnalysis(interview.id, video, filename);
+    void this.runAggregateEvaluation(interview.id);
 
     return { status: 'PROCESSING' };
   }
 
-  /** 세션 종료 후 영상 멀티모달 분석 + Gemini 종합 평가 + 저장 (백그라운드). */
-  private async runHeavyAnalysis(
+  /** 진행 중인 답변별 영상 분석이 끝날 때까지(또는 타임아웃까지) 대기. */
+  private async waitForPendingMedia(
     interviewId: number,
-    video: Buffer,
-    filename: string,
+    maxWaitMs: number,
   ): Promise<void> {
+    const start = Date.now();
+    const intervalMs = 3000;
+    while (Date.now() - start < maxWaitMs) {
+      const qs = await this.prisma.interviewQuestion.findMany({
+        where: { interviewId },
+        select: { answerText: true, mediaMetrics: true },
+      });
+      const pending = qs.filter(
+        (q) =>
+          (q.answerText ?? '').trim().length > 0 && q.mediaMetrics == null,
+      );
+      if (pending.length === 0) return;
+      await new Promise((r) => setTimeout(r, intervalMs));
+    }
+  }
+
+  /** 답변별 mediaMetrics(done)들을 하나의 비언어 지표로 평균/집계. */
+  private aggregateMediaMetrics(
+    questions: Array<{ mediaMetrics: Prisma.JsonValue | null }>,
+  ): VideoAnalysisResult | null {
+    type Done = {
+      status?: string;
+      face?: FaceMetricsResult;
+      voice?: VoiceMetricsResult | null;
+      heartRate?: HeartRateResult;
+    };
+    const done = questions
+      .map((q) => q.mediaMetrics as Done | null)
+      .filter(
+        (m): m is Done =>
+          !!m && typeof m === 'object' && m.status === 'done' && !!m.face,
+      );
+    if (done.length === 0) return null;
+
+    const avg = (arr: number[]): number =>
+      arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+
+    const faces = done.map((d) => d.face as FaceMetricsResult);
+    const expressionCounts: Record<string, number> = {};
+    const mergedDist: Record<string, number[]> = {};
+    for (const f of faces) {
+      if (f.dominantExpression) {
+        expressionCounts[f.dominantExpression] =
+          (expressionCounts[f.dominantExpression] ?? 0) + 1;
+      }
+      for (const [k, v] of Object.entries(f.expressionDistribution ?? {})) {
+        (mergedDist[k] ??= []).push(typeof v === 'number' ? v : 0);
+      }
+    }
+    const dominantExpression =
+      Object.entries(expressionCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ??
+      'neutral';
+    const expressionDistribution: Record<string, number> = {};
+    for (const [k, vals] of Object.entries(mergedDist)) {
+      expressionDistribution[k] = avg(vals);
+    }
+
+    const face: FaceMetricsResult = {
+      framesAnalyzed: faces.reduce((s, f) => s + (f.framesAnalyzed ?? 0), 0),
+      faceDetectionRate: avg(faces.map((f) => f.faceDetectionRate ?? 0)),
+      eyeContactScore: avg(faces.map((f) => f.eyeContactScore ?? 0)),
+      eyeContactRatio: avg(faces.map((f) => f.eyeContactRatio ?? 0)),
+      gazeStability: avg(faces.map((f) => f.gazeStability ?? 0)),
+      headStability: avg(faces.map((f) => f.headStability ?? 0)),
+      dominantExpression,
+      expressionDistribution,
+    };
+
+    const voices = done
+      .map((d) => d.voice)
+      .filter((v): v is VoiceMetricsResult => !!v);
+    const voice: VoiceMetricsResult | null = voices.length
+      ? {
+          pitchMeanHz: avg(voices.map((v) => v.pitchMeanHz ?? 0)),
+          pitchStdHz: avg(voices.map((v) => v.pitchStdHz ?? 0)),
+          energyMean: avg(voices.map((v) => v.energyMean ?? 0)),
+          jitter: avg(voices.map((v) => v.jitter ?? 0)),
+          speechRateWpm: avg(
+            voices.map((v) => v.speechRateWpm ?? 0),
+          ),
+          pauseRatio: avg(voices.map((v) => v.pauseRatio ?? 0)),
+        }
+      : null;
+
+    const hrs = done
+      .map((d) => d.heartRate)
+      .filter((h): h is HeartRateResult => !!h);
+    const bpms = hrs
+      .map((h) => h.bpm)
+      .filter((b): b is number => typeof b === 'number');
+    const heartRate: HeartRateResult = {
+      bpm: bpms.length ? avg(bpms) : null,
+      confidence: avg(hrs.map((h) => h.confidence ?? 0)),
+      samples: hrs.reduce((s, h) => s + (h.samples ?? 0), 0),
+    };
+
+    return { face, voice, heartRate };
+  }
+
+  /** 답변별 지표 집계 + Gemini 종합 평가 + 저장 (백그라운드). */
+  private async runAggregateEvaluation(interviewId: number): Promise<void> {
     try {
-      const analysis = await this.mlService.analyzeVideo(video, filename);
+      // 백그라운드로 돌던 답변별 영상 분석이 마무리될 시간을 준다.
+      await this.waitForPendingMedia(interviewId, 120_000);
 
       const interview = await this.prisma.interview.findUniqueOrThrow({
         where: { id: interviewId },
@@ -345,25 +513,37 @@ export class InterviewsService {
       });
 
       const company = interview.analysis.company;
-      const qa = interview.interviewQuestions.map((q) => ({
-        question: q.questionText,
-        answer: q.answerText ?? '',
-      }));
+      const qa = interview.interviewQuestions
+        .filter((q) => (q.answerText ?? '').trim().length > 0)
+        .map((q) => ({
+          question: q.questionText,
+          answer: q.answerText ?? '',
+        }));
+
+      const aggregate = this.aggregateMediaMetrics(
+        interview.interviewQuestions,
+      );
 
       const evaluation = await this.analysisService.generateOverallEvaluation({
         companyName: company.companyName,
         jobDescription: company.jobDescription,
         qa,
-        nonverbalSummary: this.buildNonverbalSummary(analysis),
+        nonverbalSummary: aggregate
+          ? this.buildNonverbalSummary(aggregate)
+          : '비언어(표정/음성/심박) 데이터가 충분히 수집되지 않았습니다.',
       });
 
       // Prisma Json 입력 타입(InputJsonValue)은 인덱스 시그니처를 요구하므로 캐스팅한다.
       const metricsJson = evaluation.metrics as unknown as Prisma.InputJsonValue;
-      const heartRateSummaryJson = {
-        heartRate: analysis.heartRate,
-        face: analysis.face,
-        voice: analysis.voice ?? null,
-      } as unknown as Prisma.InputJsonValue;
+      const heartRateSummaryJson = (
+        aggregate
+          ? {
+              heartRate: aggregate.heartRate,
+              face: aggregate.face,
+              voice: aggregate.voice ?? null,
+            }
+          : { heartRate: { bpm: null, confidence: 0, samples: 0 } }
+      ) as unknown as Prisma.InputJsonValue;
 
       const evaluationData = {
         overallScore: evaluation.overallScore,
@@ -417,6 +597,48 @@ export class InterviewsService {
     return lines.join('\n');
   }
 
+  /** 질문별 분석 진행 상황을 단계 체크리스트 형태로 변환. */
+  private buildProgress(interview: {
+    status: string;
+    evaluation: unknown;
+    interviewQuestions: Array<{
+      id: number;
+      orderIndex: number;
+      type: string;
+      questionText: string;
+      answerText: string | null;
+      mediaMetrics: Prisma.JsonValue | null;
+    }>;
+  }): InterviewProgress {
+    return {
+      status: interview.status,
+      evaluated: !!interview.evaluation,
+      questions: interview.interviewQuestions.map((q) => {
+        const answered = (q.answerText ?? '').trim().length > 0;
+        const mm = q.mediaMetrics as { status?: string } | null;
+        const rawStatus =
+          mm && typeof mm === 'object' && typeof mm.status === 'string'
+            ? mm.status
+            : null;
+        const mediaStatus: 'idle' | 'pending' | 'done' | 'failed' =
+          rawStatus === 'done' || rawStatus === 'failed'
+            ? rawStatus
+            : answered
+              ? 'pending'
+              : 'idle';
+        return {
+          id: String(q.id),
+          order: q.orderIndex,
+          type: q.type === 'follow_up' ? 'follow_up' : 'initial',
+          text: q.questionText,
+          answered,
+          mediaAnalyzed: mediaStatus === 'done',
+          mediaStatus,
+        };
+      }),
+    };
+  }
+
   /** 면접 평가 조회 (결과 페이지 폴링). 아직 분석 중이면 evaluation=null. */
   async getEvaluationForUser(
     userId: number,
@@ -433,8 +655,10 @@ export class InterviewsService {
       throw new NotFoundException('면접 세션을 찾을 수 없습니다.');
     }
 
+    const progress = this.buildProgress(interview);
+
     if (!interview.evaluation) {
-      return { status: interview.status, evaluation: null };
+      return { status: interview.status, progress, evaluation: null };
     }
 
     const ev = interview.evaluation;
@@ -458,6 +682,7 @@ export class InterviewsService {
 
     return {
       status: interview.status,
+      progress,
       evaluation: {
         sessionId: String(interview.id),
         overallScore: ev.overallScore,
@@ -478,5 +703,62 @@ export class InterviewsService {
         createdAt: ev.createdAt.toISOString(),
       },
     };
+  }
+
+  /** 본인 면접 삭제 (평가 → 꼬리질문 → 질문 → 면접 순으로 정리). */
+  async deleteForUser(
+    userId: number,
+    interviewId: number,
+  ): Promise<{ deleted: true }> {
+    const interview = await this.prisma.interview.findFirst({
+      where: { id: interviewId, analysis: { userId } },
+      select: { id: true },
+    });
+    if (!interview) {
+      throw new NotFoundException('면접 세션을 찾을 수 없습니다.');
+    }
+
+    // 자기참조(꼬리질문 parentId)와 FK 제약 때문에 순서대로 삭제한다.
+    await this.prisma.$transaction([
+      this.prisma.interviewEvaluation.deleteMany({ where: { interviewId } }),
+      this.prisma.interviewQuestion.deleteMany({
+        where: { interviewId, parentId: { not: null } },
+      }),
+      this.prisma.interviewQuestion.deleteMany({ where: { interviewId } }),
+      this.prisma.interview.delete({ where: { id: interviewId } }),
+    ]);
+
+    return { deleted: true };
+  }
+
+  /** 사용자의 면접 목록 (분석기록 → 면접 기록 섹션). */
+  async listForUser(userId: number): Promise<InterviewListItem[]> {
+    const rows = await this.prisma.interview.findMany({
+      where: { analysis: { userId } },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        evaluation: { select: { overallScore: true } },
+        analysis: { include: { company: true } },
+      },
+    });
+
+    return rows.map((row) => {
+      const company = row.analysis.company;
+      const jobTitle =
+        company.jobDescription
+          .split(/\r?\n/)
+          .find((l) => l.trim().length > 0)
+          ?.trim()
+          .slice(0, 200) ?? '채용 공고';
+      return {
+        id: String(row.id),
+        companyName: company.companyName,
+        jobTitle,
+        status: row.status,
+        overallScore: row.evaluation?.overallScore ?? null,
+        createdAt: row.createdAt.toISOString(),
+        completedAt: row.completedAt ? row.completedAt.toISOString() : null,
+      };
+    });
   }
 }

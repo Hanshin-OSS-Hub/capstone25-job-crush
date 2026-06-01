@@ -66,4 +66,8 @@ export const analysisApi = {
     );
     return response.data;
   },
+
+  remove: async (id: number): Promise<void> => {
+    await apiClient.delete(API_ENDPOINTS.ANALYSIS.BY_ID(id));
+  },
 };

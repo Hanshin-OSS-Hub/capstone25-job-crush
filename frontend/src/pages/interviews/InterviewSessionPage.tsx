@@ -23,13 +23,8 @@ const InterviewSessionPage = () => {
   const { stream, error } = useMediaStream();
   const { session, isLoading, error: sessionError } = useInterviewSession(sessionId);
   const { speak, cancel, supported: ttsSupported } = useSpeechSynthesis();
-  const {
-    startSession,
-    stopSession,
-    startAnswer,
-    stopAnswer,
-    isAnswerRecording,
-  } = useMediaRecorder(stream);
+  const { startAnswer, stopAnswer, isAnswerRecording } =
+    useMediaRecorder(stream);
 
   const [status, setStatus] = useState<'idle' | 'running' | 'paused'>('idle');
   const [localIndex, setLocalIndex] = useState(0);
@@ -69,10 +64,9 @@ const InterviewSessionPage = () => {
     setStatus('running');
     setLocalIndex(0);
     setCurrentQuestion(first);
-    startSession();
     startAnswer();
     askQuestion(first);
-  }, [askQuestion, questions, startAnswer, startSession]);
+  }, [askQuestion, questions, startAnswer]);
 
   /** 서버 턴 처리: 답변 오디오 업로드 → 다음 질문 수신 */
   const advanceViaServer = useCallback(
@@ -140,23 +134,41 @@ const InterviewSessionPage = () => {
 
   const handleEnd = useCallback(async () => {
     cancel();
-    if (isAnswerRecording) await stopAnswer();
-    const video = await stopSession();
-    setStatus('idle');
-    if (fetchable && sessionId) {
-      // 전체 영상 업로드 → 비동기 종합 분석 시작 (결과 페이지에서 폴링)
-      if (video) {
-        try {
-          await interviewService.completeSession(sessionId, video);
-        } catch (err) {
-          console.error('세션 종료(영상 업로드) 실패:', err);
+    setIsSubmitting(true);
+    try {
+      const useServer =
+        fetchable &&
+        Boolean(sessionId) &&
+        Boolean(activeQuestion) &&
+        /^\d+$/.test(activeQuestion?.id ?? '');
+      // 진행 중인 답변이 있으면 마지막 답변을 제출해 분석에 포함시킨다(다음 질문으로 넘기지는 않음).
+      if (isAnswerRecording) {
+        const media = await stopAnswer();
+        if (useServer && media && sessionId && activeQuestion) {
+          try {
+            await interviewService.submitAnswer(sessionId, activeQuestion.id, media);
+          } catch (err) {
+            console.error('마지막 답변 제출 실패:', err);
+          }
         }
       }
-      navigate(`/interviews/result/${sessionId}`);
-    } else {
-      navigate('/interviews/setup');
+      setStatus('idle');
+      setCurrentQuestion(undefined);
+      if (fetchable && sessionId) {
+        // 답변별 지표 집계 → 비동기 종합 분석 시작 (결과 페이지에서 폴링)
+        try {
+          await interviewService.finalizeSession(sessionId);
+        } catch (err) {
+          console.error('세션 종료(집계 시작) 실패:', err);
+        }
+        navigate(`/interviews/result/${sessionId}`);
+      } else {
+        navigate('/interviews/setup');
+      }
+    } finally {
+      setIsSubmitting(false);
     }
-  }, [cancel, fetchable, isAnswerRecording, navigate, sessionId, stopAnswer, stopSession]);
+  }, [activeQuestion, cancel, fetchable, isAnswerRecording, navigate, sessionId, stopAnswer]);
 
   const centerQuestionText = activeQuestion?.text ?? null;
   const showLoadedEmpty = fetchable && !isLoading && !sessionError && session && totalQuestions === 0;

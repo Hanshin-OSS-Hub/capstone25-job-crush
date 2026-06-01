@@ -66,7 +66,7 @@ export class MlService {
       language: string;
       duration_sec: number;
       speech_rate_wpm?: number | null;
-    }>('/stt', buffer, filename, 'audio/webm');
+    }>('/stt', buffer, filename, 'audio/webm', 120_000);
 
     return {
       transcript: raw.transcript ?? '',
@@ -85,6 +85,7 @@ export class MlService {
       buffer,
       filename,
       'video/webm',
+      120_000,
     );
 
     return {
@@ -121,6 +122,7 @@ export class MlService {
     buffer: Buffer,
     filename: string,
     contentType: string,
+    timeoutMs = 120_000,
   ): Promise<T> {
     const url = `${this.baseUrl}${path}`;
     const form = new FormData();
@@ -130,8 +132,16 @@ export class MlService {
       filename,
     );
 
+    // ML 분석이 멈춰도 요청이 영원히 매달리지 않도록 타임아웃을 건다.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
     try {
-      const response = await fetch(url, { method: 'POST', body: form });
+      const response = await fetch(url, {
+        method: 'POST',
+        body: form,
+        signal: controller.signal,
+      });
       if (!response.ok) {
         const detail = await response.text().catch(() => '');
         this.logger.error(`ML 서비스 오류 ${response.status}: ${detail}`);
@@ -144,10 +154,18 @@ export class MlService {
       if (error instanceof ServiceUnavailableException) {
         throw error;
       }
-      this.logger.error(`ML 서비스 호출 실패: ${String(error)}`);
-      throw new ServiceUnavailableException(
-        'ML 분석 서비스에 연결하지 못했습니다.',
+      const aborted =
+        error instanceof Error && error.name === 'AbortError';
+      this.logger.error(
+        `ML 서비스 호출 ${aborted ? '타임아웃' : '실패'}: ${String(error)}`,
       );
+      throw new ServiceUnavailableException(
+        aborted
+          ? `ML 분석 서비스 응답이 ${Math.round(timeoutMs / 1000)}초 내에 오지 않았습니다.`
+          : 'ML 분석 서비스에 연결하지 못했습니다.',
+      );
+    } finally {
+      clearTimeout(timer);
     }
   }
 }

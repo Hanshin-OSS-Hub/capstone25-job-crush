@@ -74,10 +74,39 @@ export interface InterviewEvaluation {
   createdAt: string;
 }
 
+/** 질문별 분석 진행 단계 (결과 페이지 체크리스트) */
+export interface InterviewProgressQuestion {
+  id: string;
+  order: number;
+  type: 'initial' | 'follow_up';
+  text: string;
+  answered: boolean; // STT(답변 텍스트) 완료
+  mediaAnalyzed: boolean; // 표정/음성/심박 분석 완료
+  mediaStatus: 'idle' | 'pending' | 'done' | 'failed';
+}
+
+export interface InterviewProgress {
+  status: string;
+  evaluated: boolean;
+  questions: InterviewProgressQuestion[];
+}
+
 /** GET /interviews/sessions/:id/evaluation 응답 (결과 페이지 폴링) */
 export interface InterviewEvaluationResponse {
   status: string; // PENDING | IN_PROGRESS | PROCESSING | COMPLETED | FAILED
+  progress?: InterviewProgress;
   evaluation: InterviewEvaluation | null;
+}
+
+/** GET /interviews 목록 항목 (분석기록 → 면접 기록) */
+export interface InterviewListItem {
+  id: string;
+  companyName: string;
+  jobTitle: string;
+  status: string;
+  overallScore: number | null;
+  createdAt: string;
+  completedAt: string | null;
 }
 
 /** 다음 질문(서버 턴 처리) */

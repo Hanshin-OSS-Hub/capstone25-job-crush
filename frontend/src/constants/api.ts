@@ -39,12 +39,15 @@ export const API_ENDPOINTS = {
 
   // 면접 (백엔드 연동)
   INTERVIEWS: {
+    BASE: '/interviews',
+    LIST: '/interviews',
+    BY_ID: (id: string | number) => `/interviews/${id}`,
     SESSIONS: '/interviews/sessions',
     SESSION_BY_ID: (sessionId: string) => `/interviews/sessions/${sessionId}`,
     SESSION_ANSWER: (sessionId: string) =>
       `/interviews/sessions/${sessionId}/answer`,
-    SESSION_COMPLETE: (sessionId: string) =>
-      `/interviews/sessions/${sessionId}/complete`,
+    SESSION_FINALIZE: (sessionId: string) =>
+      `/interviews/sessions/${sessionId}/finalize`,
     SESSION_EVALUATION: (sessionId: string) =>
       `/interviews/sessions/${sessionId}/evaluation`,
     FROM_ANALYSIS: '/interviews/from-analysis',

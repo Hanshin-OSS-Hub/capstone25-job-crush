@@ -1080,6 +1080,48 @@ ${resume}
     return { ...uiShape, ...ids };
   }
 
+  /**
+   * 본인 분석 결과 삭제. 연결된 면접(평가/질문 포함)도 함께 정리한다.
+   * (면접은 분석의 회사/직무 정보에 의존하므로 함께 삭제)
+   */
+  async deleteForUser(
+    userId: number,
+    id: number,
+  ): Promise<{ deleted: true }> {
+    const row = await this.prisma.analysisResult.findFirst({
+      where: { id, userId },
+      select: { id: true },
+    });
+    if (!row) {
+      throw new NotFoundException('분석 결과를 찾을 수 없습니다.');
+    }
+
+    const interviews = await this.prisma.interview.findMany({
+      where: { analysisId: id },
+      select: { id: true },
+    });
+    const interviewIds = interviews.map((i) => i.id);
+
+    // FK 제약 순서: 평가 → 꼬리질문 → 질문 → 면접 → 분석 결과
+    await this.prisma.$transaction([
+      this.prisma.interviewEvaluation.deleteMany({
+        where: { interviewId: { in: interviewIds } },
+      }),
+      this.prisma.interviewQuestion.deleteMany({
+        where: { interviewId: { in: interviewIds }, parentId: { not: null } },
+      }),
+      this.prisma.interviewQuestion.deleteMany({
+        where: { interviewId: { in: interviewIds } },
+      }),
+      this.prisma.interview.deleteMany({
+        where: { id: { in: interviewIds } },
+      }),
+      this.prisma.analysisResult.delete({ where: { id } }),
+    ]);
+
+    return { deleted: true };
+  }
+
   /** 대시보드 집계 통계 (스키마 변경 없이 쿼리로 계산). */
   async getDashboardStats(userId: number) {
     const now = new Date();
