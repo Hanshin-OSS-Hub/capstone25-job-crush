@@ -72,13 +72,17 @@ model AnalysisResult {
 
 // 5. 면접 세션 테이블[cite: 1]
 model Interview {
-  id         Int      @id @default(autoincrement())
-  analysisId Int      @map("analysis_id")
-  status     String   // e.g., "PENDING", "COMPLETED"
-  createdAt  DateTime @default(now()) @map("created_at")
+  id          Int       @id @default(autoincrement())
+  analysisId  Int       @map("analysis_id")
+  status      String // e.g., "PENDING", "PROCESSING", "COMPLETED"
+  mediaUrl    String?   @map("media_url") // 세션 전체 녹화 영상 참조
+  startedAt   DateTime? @map("started_at")
+  completedAt DateTime? @map("completed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
 
-  analysis          AnalysisResult      @relation(fields: [analysisId], references: [id])
+  analysis           AnalysisResult      @relation(fields: [analysisId], references: [id])
   interviewQuestions InterviewQuestion[]
+  evaluation         InterviewEvaluation?
 
   @@map("interviews")
 }
@@ -87,12 +91,39 @@ model Interview {
 model InterviewQuestion {
   id           Int     @id @default(autoincrement())
   interviewId  Int     @map("interview_id")
+  parentId     Int?    @map("parent_id") // 꼬리질문이면 부모 질문 id
+  orderIndex   Int     @default(0) @map("order_index")
+  type         String  @default("initial") // "initial" | "follow_up"
   questionText String  @map("question_text") @db.Text
   answerText   String? @map("answer_text") @db.Text
+  transcript   String? @db.Text // STT 결과 (answerText와 동일하게 쓰거나 원본 보관)
+  mediaMetrics Json?   @map("media_metrics") // 답변별 시선/표정/음성톤 요약 지표
   intent       String? @db.Text
   feedback     String? @db.Text
 
-  interview Interview @relation(fields: [interviewId], references: [id])
+  interview Interview           @relation(fields: [interviewId], references: [id])
+  parent    InterviewQuestion?  @relation("QuestionFollowUps", fields: [parentId], references: [id])
+  followUps InterviewQuestion[] @relation("QuestionFollowUps")
 
   @@map("interview_questions")
+}
+
+// 7. 면접 종합 평가 테이블 (Interview와 1:1)
+model InterviewEvaluation {
+  id               Int      @id @default(autoincrement())
+  interviewId      Int      @unique @map("interview_id")
+  overallScore     Int      @map("overall_score")
+  contentScore     Int      @map("content_score")
+  deliveryScore    Int      @map("delivery_score")
+  confidenceScore  Int      @map("confidence_score")
+  strengths        Json // string[]
+  weaknesses       Json // string[]
+  suggestions      Json // string[]
+  metrics          Json? // [{ name, score, comment }]
+  heartRateSummary Json?    @map("heart_rate_summary") // rPPG 심박 요약 (avg/min/max 등)
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  interview Interview @relation(fields: [interviewId], references: [id])
+
+  @@map("interview_evaluations")
 }

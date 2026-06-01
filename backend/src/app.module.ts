@@ -6,7 +6,6 @@ import { ThrottlerModule } from '@nestjs/throttler';
 
 // 기능 모듈들
 import { AuthModule } from './features/auth/auth.module';
-import { CrawlingModule } from './features/crawling/crawling.module';
 import { AnalysisModule } from './features/analysis/analysis.module';
 import { JobsModule } from './features/jobs/jobs.module';
 import { ApplicationsModule } from './features/applications/applications.module';
@@ -32,7 +31,6 @@ import { InterviewsModule } from './features/interviews/interviews.module';
 
     // 기능 모듈들
     AuthModule,
-    CrawlingModule,
     AnalysisModule,
     JobsModule,
     ApplicationsModule,

@@ -1,5 +1,5 @@
-import React from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
   FaCheckCircle,
   FaExclamationCircle,
@@ -12,6 +12,7 @@ import { BiSolidQuoteLeft } from "react-icons/bi";
 import { ROUTES } from "@/constants/routes";
 import { apiClient } from "@/api/client";
 import { API_ENDPOINTS } from "@/constants/api";
+import { analysisApi } from "./api/analysis.api";
 
 // ----------------------------------------------------------------------
 // 1. 데이터 타입 정의 (백엔드 응답 스키마 예상)
@@ -104,12 +105,68 @@ const mockResultData: AnalysisResult = {
 const AnalysisResultPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
 
   // 이전 페이지(ResumeAnalysisPage)에서 넘겨준 데이터 받기
   const receivedData = location.state as AnalysisResult | null;
+  // 분석 기록(자세히 보기)에서 들어온 경우 ?id= 로 저장된 결과를 조회
+  const idParam = searchParams.get("id");
 
-  // 데이터가 있으면 실제 분석 결과 사용, 없으면 mock 데이터로 대체
-  const data: AnalysisResult = receivedData || mockResultData;
+  // state로 데이터가 넘어온 경우 즉시 사용, 없으면 id로 서버에서 로드
+  const [loadedData, setLoadedData] = useState<AnalysisResult | null>(
+    receivedData,
+  );
+  const [isLoading, setIsLoading] = useState<boolean>(
+    !receivedData && !!idParam,
+  );
+  const [loadError, setLoadError] = useState<string | null>(null);
+  // 모의 면접 생성 중복 클릭 방지
+  const [isCreatingInterview, setIsCreatingInterview] = useState(false);
+
+  useEffect(() => {
+    if (receivedData || !idParam) return;
+    let mounted = true;
+    setIsLoading(true);
+    analysisApi
+      .getById(Number(idParam))
+      .then((detail) => {
+        if (mounted) setLoadedData(detail as AnalysisResult);
+      })
+      .catch(() => {
+        if (mounted) setLoadError("분석 결과를 불러오지 못했습니다.");
+      })
+      .finally(() => {
+        if (mounted) setIsLoading(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [receivedData, idParam]);
+
+  if (isLoading) {
+    return (
+      <div className="flex h-96 items-center justify-center">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="flex h-96 flex-col items-center justify-center gap-4">
+        <p className="text-sm text-danger">{loadError}</p>
+        <button
+          onClick={() => navigate("/history")}
+          className="rounded-md border border-primary px-5 py-2 text-sm font-medium text-primary hover:bg-primary hover:text-white"
+        >
+          분석 기록으로 돌아가기
+        </button>
+      </div>
+    );
+  }
+
+  // 로드된 실제 결과 우선, 없으면 mock 데이터로 대체
+  const data: AnalysisResult = loadedData || mockResultData;
 
   return (
     <div className="mx-auto max-w-7xl pb-24 relative">
@@ -251,19 +308,25 @@ const AnalysisResultPage = () => {
       {/* 3. 하단 플로팅 버튼 (모의 면접 시작) */}
       <div className="fixed bottom-10 left-0 right-0 flex justify-center z-50 pointer-events-none">
         <button
+          disabled={isCreatingInterview}
           onClick={async () => {
-            const id = receivedData?.analysisResultId;
+            // 이미 생성 요청 중이면 무시 (중복 클릭 방지)
+            if (isCreatingInterview) return;
+            const id = data.analysisResultId;
             if (!id) {
               navigate(ROUTES.INTERVIEWS.SETUP);
               return;
             }
+            setIsCreatingInterview(true);
             try {
-              const { data } = await apiClient.post<{ id: number }>(
+              const { data: created } = await apiClient.post<{ id: number }>(
                 API_ENDPOINTS.INTERVIEWS.FROM_ANALYSIS,
                 { analysisResultId: id },
+                { timeout: 60000 }, // Gemini 질문 생성이 10초를 넘길 수 있어 이 요청만 60초 허용
               );
-              if (data?.id != null) {
-                navigate(ROUTES.INTERVIEWS.SESSION(String(data.id)));
+              if (created?.id != null) {
+                // 질문 생성이 끝난 뒤에만 이동
+                navigate(ROUTES.INTERVIEWS.SESSION(String(created.id)));
               } else {
                 navigate(ROUTES.INTERVIEWS.SETUP);
               }
@@ -271,12 +334,20 @@ const AnalysisResultPage = () => {
               alert(
                 "모의 면접 준비 생성에 실패했습니다. 로그인 상태를 확인한 뒤 다시 시도해 주세요.",
               );
+              // 실패 시 다시 시도할 수 있도록 잠금 해제
+              setIsCreatingInterview(false);
             }
           }}
-          className="pointer-events-auto flex items-center gap-2 rounded-full bg-primary px-8 py-4 text-lg font-bold text-white shadow-2xl transition-all hover:-translate-y-1 hover:bg-opacity-90 hover:shadow-primary/50"
+          className={`pointer-events-auto flex items-center gap-2 rounded-full bg-primary px-8 py-4 text-lg font-bold text-white shadow-2xl transition-all ${
+            isCreatingInterview
+              ? "cursor-not-allowed opacity-70"
+              : "hover:-translate-y-1 hover:bg-opacity-90 hover:shadow-primary/50"
+          }`}
         >
           <FaCommentDots className="text-xl" />
-          이 내용으로 모의 면접 시작하기
+          {isCreatingInterview
+            ? "면접 질문 생성 중..."
+            : "이 내용으로 모의 면접 시작하기"}
           <FaArrowRight className="text-sm ml-1" />
         </button>
       </div>

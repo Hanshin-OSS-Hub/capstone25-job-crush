@@ -1,50 +1,55 @@
-import { useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
 import EvaluationChart from '@/features/interviews/components/EvaluationChart';
 import StrengthsWeaknesses from '@/features/interviews/components/StrengthsWeaknesses';
 import TimelineView from '@/features/interviews/components/TimelineView';
+import { interviewService } from '@/features/interviews/services/interview.service';
+import type { InterviewEvaluationResponse } from '@/features/interviews/types/interview.types';
 
-const mockEvaluation = {
-  overallScore: 82,
-  contentScore: 78,
-  deliveryScore: 85,
-  confidenceScore: 80,
-  summary: '직무 이해도는 좋으나, 시선 처리와 말하기 속도를 조금 더 안정적으로 유지하면 좋겠습니다.',
-  strengths: ['구체적인 성과 언급으로 신뢰감을 줌', '목표 의식이 명확함'],
-  weaknesses: ['시선이 자주 화면을 벗어남', '답변 속도가 일정하지 않음'],
-  suggestions: ['카메라 렌즈를 주시하며 답변하기', '키 메시지를 정리한 뒤 말하기'],
-  metrics: [
-    { name: '논리 구성', score: 80 },
-    { name: '표정/시선', score: 70 },
-    { name: '목소리 안정성', score: 85 },
-  ],
-};
-
-const mockTimeline = [
-  {
-    id: '1',
-    question: '자기소개와 지원 동기를 말씀해주세요.',
-    score: 80,
-    feedback: '핵심 메시지는 명확하지만 속도가 빠르게 느껴집니다.',
-  },
-  {
-    id: '2',
-    question: '최근 해결한 어려운 문제를 설명해주세요.',
-    score: 85,
-    feedback: '구체적 수치가 인상적이었으며 구조적인 답변이었습니다.',
-  },
-  {
-    id: '3',
-    question: '우리 회사에서 이루고 싶은 목표는 무엇인가요?',
-    score: 78,
-    feedback: '기업 가치와 연결된 키워드가 조금 더 들어가면 좋겠습니다.',
-  },
-];
+const POLL_INTERVAL_MS = 4000;
+const PENDING_STATUSES = ['PENDING', 'IN_PROGRESS', 'PROCESSING'];
 
 const InterviewResultPage = () => {
   const { sessionId } = useParams<{ sessionId: string }>();
   const title = useMemo(() => sessionId ?? 'session', [sessionId]);
+
+  const [data, setData] = useState<InterviewEvaluationResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const fetchEvaluation = useCallback(async () => {
+    if (!sessionId) return;
+    try {
+      const res = await interviewService.getEvaluation(sessionId);
+      setData(res);
+      setError(null);
+      // 분석이 끝나지 않았으면 폴링 예약
+      const stillProcessing =
+        !res.evaluation && PENDING_STATUSES.includes(res.status.toUpperCase());
+      if (stillProcessing) {
+        timerRef.current = setTimeout(fetchEvaluation, POLL_INTERVAL_MS);
+      }
+    } catch (err) {
+      console.error('면접 평가 조회 실패:', err);
+      setError('평가 결과를 불러오지 못했습니다.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [sessionId]);
+
+  useEffect(() => {
+    fetchEvaluation();
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, [fetchEvaluation]);
+
+  const evaluation = data?.evaluation ?? null;
+  const status = data?.status?.toUpperCase() ?? '';
+  const isProcessing = !evaluation && PENDING_STATUSES.includes(status);
+  const isFailed = status === 'FAILED';
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-6 pb-16">
@@ -52,22 +57,76 @@ const InterviewResultPage = () => {
         <p className="text-xs font-semibold uppercase tracking-wide text-primary">Session #{title}</p>
         <h1 className="mt-2 text-3xl font-bold text-black dark:text-white">AI 면접 평가 리포트</h1>
         <p className="mt-3 text-sm text-gray-500 dark:text-gray-400">
-          면접 진행 동안 수집된 시선, 표정, 음성 데이터를 기반으로 분석한 결과입니다.
+          면접 진행 동안 수집된 시선, 표정, 음성, 심박 데이터를 기반으로 분석한 결과입니다.
         </p>
       </header>
 
-      <EvaluationChart evaluation={mockEvaluation} />
+      {isLoading && (
+        <div className="flex flex-col items-center gap-4 py-20">
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+          <p className="text-sm text-gray-500">결과를 불러오는 중입니다…</p>
+        </div>
+      )}
 
-      <StrengthsWeaknesses
-        strengths={mockEvaluation.strengths}
-        weaknesses={mockEvaluation.weaknesses}
-        suggestions={mockEvaluation.suggestions}
-      />
+      {!isLoading && error && (
+        <p className="rounded-2xl border border-danger/30 bg-danger/5 p-6 text-center text-sm text-danger">
+          {error}
+        </p>
+      )}
 
-      <TimelineView items={mockTimeline} />
+      {!isLoading && !error && isProcessing && (
+        <div className="flex flex-col items-center gap-4 py-20">
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+          <p className="text-sm text-gray-600 dark:text-gray-300">
+            AI가 면접 영상과 답변을 분석하고 있습니다. 잠시만 기다려 주세요…
+          </p>
+          <p className="text-xs text-gray-400">분석에는 영상 길이에 따라 수십 초가 걸릴 수 있습니다.</p>
+        </div>
+      )}
+
+      {!isLoading && !error && isFailed && (
+        <p className="rounded-2xl border border-danger/30 bg-danger/5 p-6 text-center text-sm text-danger">
+          분석 처리 중 오류가 발생했습니다. 다시 시도해 주세요.
+        </p>
+      )}
+
+      {!isLoading && !error && evaluation && (
+        <>
+          <EvaluationChart evaluation={evaluation} />
+
+          {evaluation.heartRate?.bpm != null && (
+            <div className="flex items-center justify-between rounded-2xl border border-stroke bg-white p-6 shadow-sm dark:border-strokedark dark:bg-boxdark">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-primary">추정 심박 (rPPG)</p>
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  웹캠 영상의 미세한 색 변화로 추정한 심박수입니다.
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-3xl font-bold text-black dark:text-white">
+                  {Math.round(evaluation.heartRate.bpm)}
+                  <span className="ml-1 text-sm font-normal text-gray-500">bpm</span>
+                </p>
+                <p className="text-xs text-gray-400">
+                  신뢰도 {Math.round(evaluation.heartRate.confidence * 100)}%
+                </p>
+              </div>
+            </div>
+          )}
+
+          <StrengthsWeaknesses
+            strengths={evaluation.strengths}
+            weaknesses={evaluation.weaknesses}
+            suggestions={evaluation.suggestions}
+          />
+
+          {evaluation.timeline && evaluation.timeline.length > 0 && (
+            <TimelineView items={evaluation.timeline} />
+          )}
+        </>
+      )}
     </div>
   );
 };
 
 export default InterviewResultPage;
-

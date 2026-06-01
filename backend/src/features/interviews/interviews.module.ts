@@ -4,9 +4,10 @@ import { InterviewsService } from './interviews.service';
 import { AnalysisModule } from '../analysis/analysis.module';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AuthModule } from '../auth/auth.module';
+import { MlModule } from '../../shared/ml/ml.module';
 
 @Module({
-  imports: [AuthModule, AnalysisModule],
+  imports: [AuthModule, AnalysisModule, MlModule],
   controllers: [InterviewsController],
   providers: [InterviewsService, JwtAuthGuard],
 })

@@ -20,16 +20,12 @@ export const API_ENDPOINTS = {
     APPLY: (id: string | number) => `/jobs/${id}/apply`,
   },
   
-  // 크롤링 관련
-  CRAWLING: {
-    BASE: '/crawling',
-    START: '/crawling/start',
-    STATUS: '/crawling/status',
-  },
-  
   // 분석 관련
   ANALYSIS: {
     BASE: '/analysis',
+    LIST: '/analysis',
+    STATS: '/analysis/stats',
+    BY_ID: (id: string | number) => `/analysis/${id}`,
     TRENDS: '/analysis/trends',
     SALARY: '/analysis/salary',
   },
@@ -45,6 +41,10 @@ export const API_ENDPOINTS = {
   INTERVIEWS: {
     SESSIONS: '/interviews/sessions',
     SESSION_BY_ID: (sessionId: string) => `/interviews/sessions/${sessionId}`,
+    SESSION_ANSWER: (sessionId: string) =>
+      `/interviews/sessions/${sessionId}/answer`,
+    SESSION_COMPLETE: (sessionId: string) =>
+      `/interviews/sessions/${sessionId}/complete`,
     SESSION_EVALUATION: (sessionId: string) =>
       `/interviews/sessions/${sessionId}/evaluation`,
     FROM_ANALYSIS: '/interviews/from-analysis',

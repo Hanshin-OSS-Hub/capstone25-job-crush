@@ -3,6 +3,8 @@ import {
   Post,
   Get,
   Body,
+  Param,
+  ParseIntPipe,
   UploadedFile,
   UseInterceptors,
   BadRequestException,
@@ -29,6 +31,30 @@ export interface MulterFile {
 @Controller('analysis')
 export class AnalysisController {
   constructor(private readonly analysisService: AnalysisService) {}
+
+  /** 대시보드 집계 통계 (총 분석 횟수/평균 점수/이번 달/면접 횟수) */
+  @Get('stats')
+  @UseGuards(JwtAuthGuard)
+  async getDashboardStats(@CurrentUser('sub') userId: number) {
+    return this.analysisService.getDashboardStats(userId);
+  }
+
+  /** 사용자의 자소서 분석 기록 목록 (히스토리/대시보드) */
+  @Get()
+  @UseGuards(JwtAuthGuard)
+  async listAnalyses(@CurrentUser('sub') userId: number) {
+    return this.analysisService.listForUser(userId);
+  }
+
+  /** 저장된 분석 결과 상세 조회 (분석 기록 → 자세히 보기) */
+  @Get(':id')
+  @UseGuards(JwtAuthGuard)
+  async getAnalysisById(
+    @CurrentUser('sub') userId: number,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.analysisService.getByIdForUser(userId, id);
+  }
 
   /**
    * 브라우저가 이 API 주소만 GET으로 연 경우(주소창 등) → 웹 분석 페이지로 보냄.

@@ -47,6 +47,18 @@ export interface InterviewEvaluationMetric {
   comment?: string;
 }
 
+export interface InterviewHeartRate {
+  bpm: number | null;
+  confidence: number;
+}
+
+export interface InterviewTimelineItem {
+  id: string;
+  question: string;
+  score: number;
+  feedback: string;
+}
+
 export interface InterviewEvaluation {
   sessionId: string;
   overallScore: number;
@@ -57,7 +69,29 @@ export interface InterviewEvaluation {
   weaknesses: string[];
   suggestions: string[];
   metrics: InterviewEvaluationMetric[];
+  heartRate?: InterviewHeartRate | null;
+  timeline?: InterviewTimelineItem[];
   createdAt: string;
+}
+
+/** GET /interviews/sessions/:id/evaluation 응답 (결과 페이지 폴링) */
+export interface InterviewEvaluationResponse {
+  status: string; // PENDING | IN_PROGRESS | PROCESSING | COMPLETED | FAILED
+  evaluation: InterviewEvaluation | null;
+}
+
+/** 다음 질문(서버 턴 처리) */
+export interface NextInterviewQuestion {
+  id: string;
+  order: number;
+  text: string;
+  type: InterviewQuestionType;
+}
+
+/** POST /interviews/sessions/:id/answer 응답 */
+export interface SubmitAnswerResponse {
+  transcript: string;
+  nextQuestion: NextInterviewQuestion | null;
 }
 
 export interface CreateInterviewSessionPayload {

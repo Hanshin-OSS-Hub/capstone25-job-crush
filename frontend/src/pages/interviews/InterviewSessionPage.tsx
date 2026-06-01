@@ -1,19 +1,20 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import QuestionDisplay from '@/features/interviews/components/QuestionDisplay';
 import SessionControls from '@/features/interviews/components/SessionControls';
 import VideoCapture from '@/features/interviews/components/VideoCapture';
 import { useMediaStream } from '@/features/interviews/hooks/useMediaStream';
-import { useMediaPipe } from '@/features/interviews/hooks/useMediaPipe';
-import { useAudioAnalysis } from '@/features/interviews/hooks/useAudioAnalysis';
-import { useRealtimeAnalysis } from '@/features/interviews/hooks/useRealtimeAnalysis';
-import RealtimeFeedback from '@/features/interviews/components/RealtimeFeedback';
-import { useInterviewSocket } from '@/features/interviews/hooks/useInterviewSocket';
+import { useMediaRecorder } from '@/features/interviews/hooks/useMediaRecorder';
+import { useSpeechSynthesis } from '@/features/interviews/hooks/useSpeechSynthesis';
+import { interviewService } from '@/features/interviews/services/interview.service';
 import {
   isFetchableInterviewSessionId,
   useInterviewSession,
 } from '@/features/interviews/hooks/useInterviewSession';
+import type { InterviewQuestion } from '@/features/interviews/types/interview.types';
+
+type ActiveQuestion = Pick<InterviewQuestion, 'id' | 'order' | 'text' | 'type'>;
 
 const InterviewSessionPage = () => {
   const navigate = useNavigate();
@@ -21,65 +22,143 @@ const InterviewSessionPage = () => {
   const fetchable = isFetchableInterviewSessionId(sessionId);
   const { stream, error } = useMediaStream();
   const { session, isLoading, error: sessionError } = useInterviewSession(sessionId);
+  const { speak, cancel, supported: ttsSupported } = useSpeechSynthesis();
   const {
-    currentQuestion: liveQuestion,
-    latestFeedback,
-    isConnected,
-    error: socketError,
-    sendRealtimeAnalysis,
-  } = useInterviewSocket({ sessionId });
+    startSession,
+    stopSession,
+    startAnswer,
+    stopAnswer,
+    isAnswerRecording,
+  } = useMediaRecorder(stream);
+
   const [status, setStatus] = useState<'idle' | 'running' | 'paused'>('idle');
+  const [localIndex, setLocalIndex] = useState(0);
+  const [currentQuestion, setCurrentQuestion] = useState<ActiveQuestion | undefined>();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const displaySessionId = useMemo(() => sessionId ?? session?.id ?? 'preview', [session?.id, sessionId]);
-  const fallbackQuestion = useMemo(
+  const fallbackQuestion = useMemo<ActiveQuestion>(
     () => ({
       id: 'mock-question-1',
       order: 1,
       text: '최근에 해결한 가장 어려운 문제와 이를 해결하기 위해 취한 접근 방식을 설명해주세요.',
-      type: 'initial' as const,
+      type: 'initial',
     }),
     [],
   );
 
-  const firstApiQuestion = session?.questions?.[0];
-  const activeQuestion =
-    liveQuestion ?? firstApiQuestion ?? (!fetchable ? fallbackQuestion : undefined);
+  const questions = useMemo<ActiveQuestion[]>(() => {
+    if (session?.questions?.length) return session.questions;
+    if (!fetchable) return [fallbackQuestion];
+    return [];
+  }, [fallbackQuestion, fetchable, session?.questions]);
 
-  const totalQuestions = session?.questions?.length ?? 0;
-  const currentOrder = firstApiQuestion?.order ?? activeQuestion?.order ?? 1;
+  const totalQuestions = questions.length;
+  const activeQuestion = currentQuestion ?? questions[localIndex];
+  const currentOrder = activeQuestion?.order ?? localIndex + 1;
 
-  const questionIdForHooks = activeQuestion?.id ?? (fetchable && isLoading ? 'loading' : 'pending');
+  const askQuestion = useCallback(
+    (question?: ActiveQuestion) => {
+      if (question && ttsSupported) speak(question.text);
+    },
+    [speak, ttsSupported],
+  );
 
-  const { metrics: faceMetrics } = useMediaPipe({
-    stream,
-    sessionId: displaySessionId,
-    questionId: questionIdForHooks,
-  });
+  const handleStart = useCallback(() => {
+    const first = questions[0];
+    setStatus('running');
+    setLocalIndex(0);
+    setCurrentQuestion(first);
+    startSession();
+    startAnswer();
+    askQuestion(first);
+  }, [askQuestion, questions, startAnswer, startSession]);
 
-  const { metrics: audioMetrics } = useAudioAnalysis({
-    stream,
-    sessionId: displaySessionId,
-    questionId: questionIdForHooks,
-  });
+  /** 서버 턴 처리: 답변 오디오 업로드 → 다음 질문 수신 */
+  const advanceViaServer = useCallback(
+    async (audio: Blob, question: ActiveQuestion) => {
+      if (!sessionId) return false;
+      try {
+        const res = await interviewService.submitAnswer(sessionId, question.id, audio);
+        if (res.nextQuestion) {
+          const next: ActiveQuestion = {
+            id: res.nextQuestion.id,
+            order: res.nextQuestion.order,
+            text: res.nextQuestion.text,
+            type: res.nextQuestion.type,
+          };
+          setCurrentQuestion(next);
+          startAnswer();
+          askQuestion(next);
+        } else {
+          setStatus('paused');
+          setCurrentQuestion(undefined);
+        }
+        return true;
+      } catch (err) {
+        console.error('답변 제출 실패:', err);
+        return false;
+      }
+    },
+    [askQuestion, sessionId, startAnswer],
+  );
 
-  useRealtimeAnalysis({
-    sessionId: displaySessionId,
-    questionId: questionIdForHooks,
-    faceMetrics,
-    audioMetrics,
-    onEmit: sendRealtimeAnalysis,
-  });
+  /** 로컬(미리보기) 진행: 다음 프리셋 질문으로 이동 */
+  const advanceLocally = useCallback(() => {
+    const nextIndex = localIndex + 1;
+    if (nextIndex >= totalQuestions) {
+      setStatus('paused');
+      return;
+    }
+    setLocalIndex(nextIndex);
+    setCurrentQuestion(questions[nextIndex]);
+    startAnswer();
+    askQuestion(questions[nextIndex]);
+  }, [askQuestion, localIndex, questions, startAnswer, totalQuestions]);
 
-  const handleStart = () => setStatus('running');
-  const handlePause = () => setStatus('paused');
-  const handleEnd = () => {
+  const handleAnswerComplete = useCallback(async () => {
+    if (!activeQuestion || isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      const audio = await stopAnswer();
+      const useServer = fetchable && Boolean(sessionId) && /^\d+$/.test(activeQuestion.id);
+      if (useServer && audio) {
+        const ok = await advanceViaServer(audio, activeQuestion);
+        if (!ok) advanceLocally();
+      } else {
+        advanceLocally();
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [activeQuestion, advanceLocally, advanceViaServer, fetchable, isSubmitting, sessionId, stopAnswer]);
+
+  const handlePause = useCallback(() => {
+    cancel();
+    setStatus('paused');
+  }, [cancel]);
+
+  const handleEnd = useCallback(async () => {
+    cancel();
+    if (isAnswerRecording) await stopAnswer();
+    const video = await stopSession();
     setStatus('idle');
-    navigate('/interviews/setup');
-  };
+    if (fetchable && sessionId) {
+      // 전체 영상 업로드 → 비동기 종합 분석 시작 (결과 페이지에서 폴링)
+      if (video) {
+        try {
+          await interviewService.completeSession(sessionId, video);
+        } catch (err) {
+          console.error('세션 종료(영상 업로드) 실패:', err);
+        }
+      }
+      navigate(`/interviews/result/${sessionId}`);
+    } else {
+      navigate('/interviews/setup');
+    }
+  }, [cancel, fetchable, isAnswerRecording, navigate, sessionId, stopAnswer, stopSession]);
 
-  const centerQuestionText =
-    liveQuestion?.text ?? firstApiQuestion?.text ?? (!fetchable ? fallbackQuestion.text : null);
-
+  const centerQuestionText = activeQuestion?.text ?? null;
   const showLoadedEmpty = fetchable && !isLoading && !sessionError && session && totalQuestions === 0;
 
   return (
@@ -116,10 +195,14 @@ const InterviewSessionPage = () => {
             <p className="max-w-3xl text-lg font-semibold leading-relaxed text-black dark:text-white md:text-xl">
               {centerQuestionText}
             </p>
-            {fetchable && totalQuestions > 0 && (
+            {totalQuestions > 0 && (
               <p className="mt-4 text-xs text-gray-500 dark:text-gray-400">
-                현재 질문 {currentOrder} / {totalQuestions}
+                현재 질문 {currentOrder}
+                {activeQuestion?.type === 'follow_up' ? ' · 꼬리질문' : ` / ${totalQuestions}`}
               </p>
+            )}
+            {!ttsSupported && (
+              <p className="mt-2 text-xs text-warning">이 브라우저는 음성 질문(TTS)을 지원하지 않습니다.</p>
             )}
           </>
         )}
@@ -134,7 +217,7 @@ const InterviewSessionPage = () => {
             </div>
             <button
               type="button"
-              onClick={() => navigate('/interviews/setup')}
+              onClick={handleEnd}
               className="text-sm text-white/70 underline-offset-4 hover:underline"
             >
               종료
@@ -160,34 +243,29 @@ const InterviewSessionPage = () => {
 
           <div className="grid gap-3 md:grid-cols-2">
             <div className="rounded-lg border border-stroke p-4 text-center dark:border-strokedark">
-              <p className="text-xs text-gray-500">타이머</p>
-              <p className="text-2xl font-bold text-black dark:text-white">00:00</p>
+              <p className="text-xs text-gray-500">녹화 상태</p>
+              <p className="text-2xl font-bold text-black dark:text-white">
+                {isSubmitting ? '처리 중…' : isAnswerRecording ? '답변 녹음 중' : '대기'}
+              </p>
             </div>
             <div className="rounded-lg border border-stroke p-4 text-center dark:border-strokedark">
               <p className="text-xs text-gray-500">질문 번호</p>
               <p className="text-2xl font-bold text-black dark:text-white">
-                {totalQuestions > 0 ? `${currentOrder} / ${totalQuestions}` : '—'}
+                {totalQuestions > 0 ? currentOrder : '—'}
               </p>
             </div>
           </div>
 
-          <RealtimeFeedback faceMetrics={faceMetrics} audioMetrics={audioMetrics} />
-
-          <div className="rounded-xl border border-stroke p-4 text-sm dark:border-strokedark">
-            <div className="flex items-center justify-between">
-              <span className="font-semibold text-gray-600 dark:text-gray-300">연결 상태</span>
-              <span className={isConnected ? 'text-success' : 'text-gray-400'}>
-                {isConnected ? '실시간 연결됨' : '대기 중'}
-              </span>
-            </div>
-            {socketError && <p className="mt-2 text-xs text-danger">{socketError}</p>}
-            {latestFeedback && (
-              <div className="mt-3 rounded-lg bg-primary/5 p-3 text-xs text-gray-600 dark:text-gray-300">
-                <p className="font-semibold text-primary">AI 피드백</p>
-                <p className="mt-1 text-sm text-black dark:text-white">{latestFeedback.message}</p>
-              </div>
-            )}
-          </div>
+          {status === 'running' && (
+            <button
+              type="button"
+              onClick={handleAnswerComplete}
+              disabled={isSubmitting}
+              className="rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-primary/40"
+            >
+              {isSubmitting ? '답변 처리 중…' : '답변 완료 · 다음 질문'}
+            </button>
+          )}
 
           <SessionControls status={status} onStart={handleStart} onPause={handlePause} onEnd={handleEnd} />
         </section>
@@ -197,4 +275,3 @@ const InterviewSessionPage = () => {
 };
 
 export default InterviewSessionPage;
-

@@ -1,9 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { GoHomeFill, GoGraph } from "react-icons/go";
-import { FaMicrophone } from "react-icons/fa";
 import { FaGear } from "react-icons/fa6";
-import { ROUTES } from "@/constants/routes";
 
 // --- 누락된 컴포넌트 임시 플레이스홀더 ---
 const SidebarLinkGroup = ({ children, activeCondition }: any) => {
@@ -143,21 +141,6 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
                 >
                   <GoGraph />
                   분석기록
-                </NavLink>
-              </li>
-
-              {/* --- 면접 연습 (충돌 해결됨) --- */}
-              <li>
-                <NavLink
-                  to={ROUTES.INTERVIEWS.SETUP}
-                  onClick={handleItemClick} // sjy 브랜치의 클릭 핸들러 추가
-                  className={`group relative flex items-center gap-2.5 rounded-sm py-2 px-4 font-medium text-bodydark1 duration-300 ease-in-out hover:bg-graydark dark:hover:bg-meta-4 ${
-                    pathname.startsWith("/interviews") && // dev 브랜치의 경로 확인 로직 사용
-                    "bg-graydark dark:bg-meta-4"
-                  }`}
-                >
-                  <FaMicrophone />
-                  면접연습
                 </NavLink>
               </li>
 

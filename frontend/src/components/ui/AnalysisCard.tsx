@@ -14,14 +14,23 @@ export interface AnalysisData {
   date: string;
 }
 
-const AnalysisCard = ({ data }: { data: AnalysisData }) => {
+const AnalysisCard = ({
+  data,
+  onClick,
+}: {
+  data: AnalysisData;
+  onClick?: () => void;
+}) => {
   const statusBadgeClass =
     data.status === "완료"
       ? "bg-success text-success"
       : "bg-warning text-warning";
 
   return (
-    <div className="rounded-lg border border-stroke bg-white p-6 shadow-default dark:border-strokedark dark:bg-boxdark transition-transform hover:-translate-y-1 hover:shadow-lg cursor-pointer">
+    <div
+      onClick={onClick}
+      className="rounded-lg border border-stroke bg-white p-6 shadow-default dark:border-strokedark dark:bg-boxdark transition-transform hover:-translate-y-1 hover:shadow-lg cursor-pointer"
+    >
       <div className="flex items-start justify-between mb-6">
         <div className="flex items-center gap-4">
           <div
