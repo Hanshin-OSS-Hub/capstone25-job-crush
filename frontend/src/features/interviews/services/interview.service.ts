@@ -30,8 +30,13 @@ export const interviewService = {
     media: Blob,
   ): Promise<SubmitAnswerResponse> {
     const form = new FormData();
-    form.append('media', media, 'answer.webm');
-    form.append('questionId', questionId);
+    // Blob type이 비어 있으면 서버 multer가 거절할 수 있어 명시적으로 webm 지정
+    const file =
+      media.type && media.type.length > 0
+        ? media
+        : new Blob([media], { type: 'video/webm' });
+    form.append('media', file, 'answer.webm');
+    form.append('questionId', String(questionId));
     const response = await apiClient.post<SubmitAnswerResponse>(
       API_ENDPOINTS.INTERVIEWS.SESSION_ANSWER(sessionId),
       form,

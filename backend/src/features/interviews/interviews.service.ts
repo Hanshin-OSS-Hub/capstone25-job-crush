@@ -513,12 +513,13 @@ export class InterviewsService {
       });
 
       const company = interview.analysis.company;
-      const qa = interview.interviewQuestions
-        .filter((q) => (q.answerText ?? '').trim().length > 0)
-        .map((q) => ({
-          question: q.questionText,
-          answer: q.answerText ?? '',
-        }));
+      const orderedQuestions = [...interview.interviewQuestions].sort(
+        (a, b) => a.orderIndex - b.orderIndex,
+      );
+      const qa = orderedQuestions.map((q) => ({
+        question: q.questionText,
+        answer: (q.answerText ?? '').trim() || '(무응답)',
+      }));
 
       const aggregate = this.aggregateMediaMetrics(
         interview.interviewQuestions,
@@ -532,6 +533,8 @@ export class InterviewsService {
           ? this.buildNonverbalSummary(aggregate)
           : '비언어(표정/음성/심박) 데이터가 충분히 수집되지 않았습니다.',
       });
+
+      await this.applyPerQuestionReviews(orderedQuestions, evaluation);
 
       // Prisma Json 입력 타입(InputJsonValue)은 인덱스 시그니처를 요구하므로 캐스팅한다.
       const metricsJson = evaluation.metrics as unknown as Prisma.InputJsonValue;
@@ -574,6 +577,43 @@ export class InterviewsService {
       await this.prisma.interview
         .update({ where: { id: interviewId }, data: { status: 'FAILED' } })
         .catch(() => undefined);
+    }
+  }
+
+  /** Gemini 질문별 평가를 DB feedback·mediaMetrics에 반영. */
+  private async applyPerQuestionReviews(
+    orderedQuestions: Array<{ id: number }>,
+    evaluation: {
+      perQuestionReviews: Array<{
+        questionIndex: number;
+        score: number;
+        feedback: string;
+      }>;
+    },
+  ): Promise<void> {
+    for (const review of evaluation.perQuestionReviews) {
+      const q = orderedQuestions[review.questionIndex - 1];
+      if (!q) continue;
+      const row = await this.prisma.interviewQuestion.findUnique({
+        where: { id: q.id },
+        select: { mediaMetrics: true },
+      });
+      const prev =
+        row?.mediaMetrics &&
+        typeof row.mediaMetrics === 'object' &&
+        !Array.isArray(row.mediaMetrics)
+          ? (row.mediaMetrics as Record<string, unknown>)
+          : {};
+      await this.prisma.interviewQuestion.update({
+        where: { id: q.id },
+        data: {
+          feedback: review.feedback,
+          mediaMetrics: {
+            ...prev,
+            evaluationScore: review.score,
+          } as unknown as Prisma.InputJsonValue,
+        },
+      });
     }
   }
 
@@ -673,12 +713,27 @@ export class InterviewsService {
       heartRate?: { bpm: number | null; confidence: number };
     } | null;
 
-    const timeline = interview.interviewQuestions.map((q) => ({
-      id: String(q.id),
-      question: q.questionText,
-      score: ev.overallScore,
-      feedback: q.feedback ?? (q.answerText ? '답변이 기록되었습니다.' : '무응답'),
-    }));
+    const timeline = [...interview.interviewQuestions]
+      .sort((a, b) => a.orderIndex - b.orderIndex)
+      .map((q) => {
+        const mm = q.mediaMetrics as { evaluationScore?: number } | null;
+        const perQScore =
+          typeof mm?.evaluationScore === 'number'
+            ? mm.evaluationScore
+            : (q.answerText ?? '').trim().length > 0
+              ? ev.overallScore
+              : 0;
+        return {
+          id: String(q.id),
+          question: q.questionText,
+          score: perQScore,
+          feedback:
+            q.feedback ??
+            ((q.answerText ?? '').trim().length > 0
+              ? '답변이 기록되었습니다.'
+              : '무응답'),
+        };
+      });
 
     return {
       status: interview.status,

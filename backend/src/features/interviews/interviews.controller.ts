@@ -16,7 +16,6 @@ import { InterviewsService } from './interviews.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { CreateInterviewFromAnalysisDto } from './dto/create-interview-from-analysis.dto';
-import { SubmitAnswerDto } from './dto/submit-answer.dto';
 import type { MulterFile } from '../analysis/analysis.controller';
 
 @Controller('interviews')
@@ -68,7 +67,13 @@ export class InterviewsController {
     FileInterceptor('media', {
       limits: { fileSize: 100 * 1024 * 1024 }, // 답변 세그먼트(영상+오디오) 최대 100MB
       fileFilter: (_req, file, cb) => {
-        cb(null, /^(audio|video)\//.test(file.mimetype));
+        const mime = (file.mimetype ?? '').toLowerCase();
+        const name = (file.originalname ?? '').toLowerCase();
+        const allowedMime =
+          /^(audio|video)\//.test(mime) || mime === 'application/octet-stream';
+        const allowedExt = /\.(webm|mp4|wav|m4a|ogg|mp3)$/.test(name);
+        // Chrome/FormData가 octet-stream·빈 mimetype으로 보내는 경우가 있어 확장자도 허용
+        cb(null, allowedMime || allowedExt || mime === '');
       },
     }),
   )
@@ -76,16 +81,24 @@ export class InterviewsController {
     @CurrentUser('sub') userId: number,
     @Param('id', ParseIntPipe) id: number,
     @UploadedFile() file: MulterFile,
-    @Body() dto: SubmitAnswerDto,
+    @Body('questionId', ParseIntPipe) questionId: number,
   ) {
-    if (!file || !file.buffer) {
-      throw new BadRequestException('답변 미디어가 업로드되지 않았습니다.');
+    if (!file) {
+      throw new BadRequestException(
+        '답변 미디어가 업로드되지 않았습니다. (필드명 media, webm/mp4 등)',
+      );
+    }
+    const buffer = file.buffer;
+    if (!buffer?.length) {
+      throw new BadRequestException(
+        '답변 미디어를 읽지 못했습니다. 녹화가 비어 있지 않은지 확인해 주세요.',
+      );
     }
     return this.interviewsService.submitAnswer(
       userId,
       id,
-      dto.questionId,
-      file.buffer,
+      questionId,
+      buffer,
       file.originalname || 'answer.webm',
     );
   }
