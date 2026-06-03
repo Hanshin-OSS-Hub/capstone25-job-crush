@@ -12,6 +12,8 @@ export default defineConfig({
   },
   server: {
     host: true, // 외부 접속 허용 (Docker 환경 필수)
+    // Cloudflare 터널 Host 헤더 (jobcrush.jicp.cloud 등)
+    allowedHosts: ["jobcrush.jicp.cloud", ".jicp.cloud"],
     proxy: {
       // '/api'로 시작하는 요청을 백엔드(3000번 포트)로 보냄
       "/api": {
